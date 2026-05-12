@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.request
 import zipfile
+from array import array
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,20 +23,24 @@ class VoiceEngineState:
     last_text: str = ""
     last_error: str = ""
     model_ready: bool = False
+    audio_level: float = 0.0
+    device_name: str = ""
 
 
 class VoiceEngine:
     def __init__(
         self,
         wake_words: list[str],
-        language: str = "pl",
+        language: str = "pt-BR",
         listen_seconds: int = 7,
+        device: int | str | None = None,
         on_text: Callable[[str], None] | None = None,
         on_state: Callable[[VoiceEngineState], None] | None = None,
     ):
         self.wake_words = [w.lower() for w in wake_words]
         self.language = language
         self.listen_seconds = listen_seconds
+        self.device = device
         self.on_text = on_text
         self.on_state = on_state
         self.state = VoiceEngineState()
@@ -81,6 +86,13 @@ class VoiceEngine:
             SetLogLevel(-1)
             model_path = get_vosk_model_path(self.language)
             recognizer = KaldiRecognizer(Model(model_path), 16000)
+            if self.device is not None and str(self.device).strip() != "":
+                sd.default.device = (self.device, None)
+            try:
+                device_info = sd.query_devices(sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device, "input")
+                self.state.device_name = str(device_info.get("name", "Microfone"))
+            except Exception:
+                self.state.device_name = "Microfone padrao"
             self.state.model_ready = True
             self._emit_state()
 
@@ -89,7 +101,9 @@ class VoiceEngine:
                     self.state.last_error = str(status)
                     self._emit_state()
                 try:
-                    self._audio_q.put_nowait(bytes(indata))
+                    raw = bytes(indata)
+                    self.state.audio_level = audio_level(raw)
+                    self._audio_q.put_nowait(raw)
                 except queue.Full:
                     pass
 
@@ -144,6 +158,29 @@ class VoiceEngine:
 
 def timestamp() -> str:
     return datetime.now().strftime("%H:%M:%S")
+
+
+def audio_level(raw_audio: bytes) -> float:
+    if not raw_audio:
+        return 0.0
+    samples = array("h")
+    samples.frombytes(raw_audio)
+    if not samples:
+        return 0.0
+    avg = sum(abs(sample) for sample in samples) / len(samples)
+    return max(0.0, min(1.0, avg / 12000))
+
+
+def list_input_devices() -> list[dict[str, str | int]]:
+    try:
+        import sounddevice as sd
+    except Exception as exc:
+        return [{"index": -1, "name": f"sounddevice indisponivel: {exc}"}]
+    devices: list[dict[str, str | int]] = []
+    for index, item in enumerate(sd.query_devices()):
+        if int(item.get("max_input_channels", 0)) > 0:
+            devices.append({"index": index, "name": str(item.get("name", f"Microfone {index}"))})
+    return devices
 
 
 VOSK_MODELS = {

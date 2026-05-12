@@ -65,6 +65,9 @@ echo [4/5] Building JarvisAssistant.exe...
     --hidden-import keyboard ^
     --hidden-import pystray ^
     --hidden-import PIL ^
+    --hidden-import openai_controller ^
+    --hidden-import spotify_controller ^
+    --hidden-import secrets_store ^
     "%ROOT%assistant_panel.py"
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 

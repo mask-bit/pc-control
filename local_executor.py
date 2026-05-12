@@ -1,12 +1,30 @@
-"""Execucao local segura para o assistente de voz."""
+"""Execucao local segura para o assistente no Windows."""
 
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import urllib.parse
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
+
+PROCESS_ALIASES = {
+    "chrome": "chrome.exe",
+    "google chrome": "chrome.exe",
+    "edge": "msedge.exe",
+    "discord": "Discord.exe",
+    "spotify": "Spotify.exe",
+    "word": "WINWORD.EXE",
+    "excel": "EXCEL.EXE",
+    "powerpoint": "POWERPNT.EXE",
+    "notepad": "notepad.exe",
+    "bloco de notas": "notepad.exe",
+    "calculadora": "CalculatorApp.exe",
+    "explorador": "explorer.exe",
+    "explorer": "explorer.exe",
+}
 
 
 def expand_path(value: str) -> str:
@@ -14,35 +32,66 @@ def expand_path(value: str) -> str:
 
 
 def open_url(url: str) -> None:
-    if not url.startswith(("http://", "https://", "spotify:", "msteams:", "shell:")):
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("URL vazia.")
+    if not url.startswith(("http://", "https://", "spotify:", "msteams:", "shell:", "mailto:")):
         url = "https://" + url
-    if url.startswith("shell:"):
-        subprocess.Popen(["cmd.exe", "/c", "start", "", url], shell=False)
-    else:
-        os.startfile(url)  # type: ignore[attr-defined]
+    os.startfile(url)  # type: ignore[attr-defined]
 
 
 def open_app(target: str, args: str = "") -> None:
-    target = expand_path(target)
-    if target.startswith("shell:"):
-        subprocess.Popen(["cmd.exe", "/c", "start", "", target], shell=False)
+    target = expand_path((target or "").strip())
+    if not target:
+        raise ValueError("Aplicativo vazio.")
+    if target.startswith(("http://", "https://", "spotify:", "msteams:", "shell:")) or target.endswith(":"):
+        open_url(target)
         return
-    if target.endswith(":"):
-        os.startfile(target)  # type: ignore[attr-defined]
+
+    if Path(target).exists():
+        command = [target]
+        if args:
+            command.extend(shlex.split(args, posix=False))
+        subprocess.Popen(command, shell=False)
         return
-    if args:
-        subprocess.Popen([target, args], shell=False)
-    else:
-        subprocess.Popen([target], shell=False)
+
+    try:
+        command = [target]
+        if args:
+            command.extend(shlex.split(args, posix=False))
+        subprocess.Popen(command, shell=False)
+    except OSError:
+        start_args = ["cmd.exe", "/c", "start", "", target]
+        if args:
+            start_args.extend(shlex.split(args, posix=False))
+        subprocess.Popen(start_args, shell=False)
 
 
 def open_path(path: str) -> None:
-    os.startfile(expand_path(path))  # type: ignore[attr-defined]
+    expanded = expand_path(path)
+    if not expanded:
+        raise ValueError("Caminho vazio.")
+    os.startfile(expanded)  # type: ignore[attr-defined]
 
 
 def search_web(query: str) -> None:
     encoded = urllib.parse.quote_plus(query)
     open_url(f"https://www.google.com/search?q={encoded}")
+
+
+def search_youtube(query: str) -> None:
+    encoded = urllib.parse.quote_plus(query)
+    open_url(f"https://www.youtube.com/results?search_query={encoded}")
+
+
+def close_app(target: str, process_name: str = "") -> None:
+    clean_target = (target or "").strip().lower()
+    process = process_name or PROCESS_ALIASES.get(clean_target, clean_target)
+    if not process:
+        raise ValueError("Aplicativo para fechar nao informado.")
+    if not process.lower().endswith(".exe"):
+        process += ".exe"
+    subprocess.run(["taskkill", "/IM", process, "/T", "/F"], check=False, capture_output=True, text=True)
 
 
 def copy_text(text: str) -> None:
@@ -67,7 +116,6 @@ def press_media_key(key: str, count: int = 1) -> None:
     except Exception:
         pass
 
-    # nircmd/extra deps seriam mais pesados; PowerShell SendKeys resolve MVP.
     key_map = {
         "play_pause": "{MEDIA_PLAY_PAUSE}",
         "next": "{MEDIA_NEXT_TRACK}",
@@ -86,9 +134,6 @@ def press_media_key(key: str, count: int = 1) -> None:
 
 def set_system_volume(level: int) -> None:
     level = max(0, min(100, int(level)))
-    # Sem dependencia externa: reduz/aumenta por teclas de midia ate aproximar.
-    press_media_key("volume_mute")
-    press_media_key("volume_mute")
     press_media_key("volume_down", 50)
     press_media_key("volume_up", max(0, round(level / 2)))
 

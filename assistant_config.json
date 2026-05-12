@@ -4,6 +4,7 @@
   "wake_words": ["jarvis", "assistente"],
   "hotkey": "Ctrl+Shift+J",
   "listen_seconds": 7,
+  "microphone_device": "",
   "confirmar_acoes_sensiveis": true,
   "usar_openai": false,
   "openai_model": "gpt-4.1-mini",
@@ -15,7 +16,8 @@
     "gmail": "https://mail.google.com",
     "whatsapp": "https://web.whatsapp.com",
     "github": "https://github.com",
-    "spotify": "https://open.spotify.com"
+    "spotify": "https://open.spotify.com",
+    "discord": "https://discord.com/app"
   },
   "apps": {
     "chrome": "chrome",
@@ -28,9 +30,22 @@
     "bloco de notas": "notepad",
     "calculadora": "calc",
     "explorador": "explorer",
+    "explorador de arquivos": "explorer",
     "explorer": "explorer",
+    "discord": "Discord",
     "codex": "shell:AppsFolder\\OpenAI.Codex!App",
     "spotify": "spotify:"
+  },
+  "processos": {
+    "chrome": "chrome.exe",
+    "edge": "msedge.exe",
+    "discord": "Discord.exe",
+    "spotify": "Spotify.exe",
+    "word": "WINWORD.EXE",
+    "excel": "EXCEL.EXE",
+    "notepad": "notepad.exe",
+    "bloco de notas": "notepad.exe",
+    "calculadora": "CalculatorApp.exe"
   },
   "pastas": {
     "documentos": "%USERPROFILE%\\Documents",
@@ -40,8 +55,17 @@
   },
   "spotify": {
     "default_query": "lo-fi focus",
+    "foco": "https://open.spotify.com/playlist/5WsVwbOK5XJrQx7JiTmQqU?si=bb27c51dc3a64d6e",
+    "lo-fi": "lo-fi focus",
+    "jazz": "jazz instrumental",
+    "calma": "calm instrumental",
     "playlist foco": "https://open.spotify.com/playlist/5WsVwbOK5XJrQx7JiTmQqU?si=bb27c51dc3a64d6e",
     "playlist_foco": "https://open.spotify.com/playlist/5WsVwbOK5XJrQx7JiTmQqU?si=bb27c51dc3a64d6e"
+  },
+  "spotify_web": {
+    "client_id": "",
+    "redirect_uri": "http://127.0.0.1:43879/callback",
+    "scopes": "user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative"
   },
   "rotinas": {
     "modo estudo": [

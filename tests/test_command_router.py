@@ -64,3 +64,27 @@ def test_unknown_command_does_not_execute(tmp_path):
 
     assert result.success is False
     assert result.action is None
+
+
+def test_youtube_search_action(tmp_path):
+    result = router(tmp_path).intent_to_action(parse_command("pesquisar lo-fi no YouTube", CONFIG))
+
+    assert result is not None
+    assert result.type == "search_youtube"
+    assert result.args["query"] == "lo-fi"
+
+
+def test_sequence_action(tmp_path):
+    result = router(tmp_path).intent_to_action(parse_command("abrir Chrome e Spotify", CONFIG))
+
+    assert result is not None
+    assert result.type == "sequence"
+    assert len(result.args["actions"]) == 2
+
+
+def test_close_app_action(tmp_path):
+    result = router(tmp_path).intent_to_action(parse_command("fechar Chrome", CONFIG))
+
+    assert result is not None
+    assert result.type == "close_app"
+    assert result.args["target"] == "chrome"

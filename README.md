@@ -1,18 +1,20 @@
 # Jarvis Assistant
 
-Assistente local de controle por voz para Windows, em portugues-BR. O foco do projeto e transformar fala em comandos reais para o PC: abrir aplicativos, sites, pastas, pesquisar, controlar Spotify, ajustar volume e executar rotinas.
+Assistente desktop real para Windows, em portugues-BR, inspirado em uma Alexa/Jarvis para PC. O foco e transformar texto ou fala em acoes reais: abrir aplicativos, abrir YouTube, pesquisar, controlar Spotify, fechar apps, ajustar volume e executar rotinas.
 
-O app principal e o core Python com Vosk offline. O prototipo Tauri em `assistant-desktop/` existe apenas como experimento visual.
+O app principal e o core Python com painel profissional em CustomTkinter, Vosk offline para voz, executor local seguro, OpenAI opcional para interpretar frases vagas e Spotify com fallback por URI/teclas de midia ou Web API via OAuth PKCE. O prototipo Tauri em `assistant-desktop/` existe apenas como experimento visual.
 
 ## Status
 
-Alpha funcional.
+Alpha funcional com reconstrução do produto principal.
 
 - Core Python real: ativo.
 - Voz offline com Vosk: ativo.
 - Hotkey + wake words: ativo.
-- Executor local Windows: ativo.
-- Spotify por URI, busca e teclas de midia: ativo.
+- Executor local Windows: apps, sites, YouTube, pastas, fechar apps, clipboard e volume.
+- Spotify: URI/teclas de midia e Web API opcional via OAuth PKCE.
+- OpenAI: opcional, com chave local segura, para interpretacao avançada e respostas curtas.
+- Painel: Inicio, Assistente, Spotify, Rotinas, Voz e audio, Integracoes, Configuracoes e Logs.
 - Tauri/React: experimental.
 
 ## Quickstart
@@ -48,10 +50,13 @@ Esses comandos na raiz redirecionam para `assistant-desktop/`.
 ```text
 abre o Chrome
 abre YouTube
+pesquisar lo-fi no YouTube
 pesquisa Python no Google
+abrir Chrome e Spotify
 toca playlist foco
 pausa Spotify
 proxima musica
+fechar Spotify
 aumenta volume
 ativar modo estudo
 listar comandos
@@ -76,12 +81,14 @@ dist\workspace-config.json
 ## Estrutura
 
 ```text
-assistant_panel.py        Painel principal do assistente de voz
+assistant_panel.py        Painel principal premium do assistente
 voice_engine.py           Microfone, Vosk, wake words e hotkey
 intent_parser.py          Parser local de comandos em portugues-BR
 command_router.py         Orquestrador seguro de intencoes e acoes
-local_executor.py         Executor Windows: apps, sites, pastas, volume, clipboard
-spotify_controller.py     Controle Spotify por URI, busca e teclas de midia
+local_executor.py         Executor Windows: apps, sites, YouTube, pastas, volume, clipboard, fechar apps
+spotify_controller.py     Spotify por URI/teclas e Web API OAuth PKCE
+openai_controller.py      Interpretacao e resposta opcional via OpenAI Responses API
+secrets_store.py          Segredos locais com keyring ou DPAPI no Windows
 assistant_config.json     Configuracao do assistente
 workspace.py              Launcher legado e compatibilidade
 config_gui.py             Configurador legado
@@ -99,6 +106,8 @@ flowchart LR
   Parser --> Router["command_router.py"]
   Router --> Exec["local_executor.py"]
   Router --> Spotify["spotify_controller.py"]
+  Parser --> OpenAI["openai_controller.py opcional"]
+  OpenAI --> Secrets["secrets_store.py"]
   Router --> Logs["assistant_logs.jsonl"]
   Panel["assistant_panel.py"] --> Voice
   Config["assistant_config.json"] --> Parser
@@ -107,15 +116,17 @@ flowchart LR
 
 ## Configuracao
 
-Edite `assistant_config.json` para adicionar apps, sites, pastas, playlists e rotinas.
+Edite `assistant_config.json` ou use o painel para adicionar integrações e rotinas. Apps, sites, pastas, playlists e rotinas ficam no JSON; chaves e tokens ficam fora dele.
 
-OpenAI e opcional. Se `usar_openai` for ativado, defina a chave via variavel de ambiente:
+OpenAI e opcional. Voce pode salvar a chave na tela Integracoes ou usar variavel de ambiente:
 
 ```bat
 set OPENAI_API_KEY=sk-sua-chave
 ```
 
 Sem OpenAI, os comandos essenciais continuam funcionando pelo parser local.
+
+Spotify Web API e opcional. Para conectar, crie um app no Spotify Developer Dashboard, configure o redirect URI `http://127.0.0.1:43879/callback`, cole o Client ID na tela Integracoes e clique em Conectar Spotify.
 
 ## Validacao
 
