@@ -1,0 +1,34 @@
+name: Bug report
+description: Reporte um problema no Jarvis Assistant
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: O que aconteceu?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Como reproduzir
+      description: Passos, comando de voz/texto e resultado obtido.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows
+      placeholder: Windows 11 24H2
+  - type: input
+    id: python
+    attributes:
+      label: Python
+      placeholder: Python 3.12
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs sem dados sensiveis
+      render: text

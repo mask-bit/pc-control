@@ -1,11 +1,14 @@
-"""
+﻿"""
 Workspace Launcher
 System tray: clap detection + hotkey -> launches workspace -> stays in tray.
 """
 
-import ctypes, ctypes.wintypes, json, math, os, queue, re, shutil, subprocess, sys, time, threading
+import argparse, ctypes, ctypes.wintypes, json, math, os, queue, re, shutil, subprocess, sys, time, threading
 from concurrent.futures import ThreadPoolExecutor
-import numpy as np, sounddevice as sd
+from config_utils import load_config
+
+np = None
+sd = None
 
 user32 = ctypes.windll.user32
 EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
@@ -36,7 +39,35 @@ def _add_pid(pid):
     with _pids_lock:
         launched_pids.append(pid)
 
-# ── Win32 ─────────────────────────────────────────────────────
+def ensure_numpy():
+    """Import numpy only for audio/detection paths."""
+    global np
+    if np is None:
+        try:
+            import numpy as _np
+        except ImportError as e:
+            raise RuntimeError(
+                "Missing dependency: numpy. Run: python -m pip install -r requirements.txt"
+            ) from e
+        np = _np
+    return np
+
+def ensure_audio_dependencies():
+    """Import microphone dependencies only when the listener actually starts."""
+    global sd
+    ensure_numpy()
+    if sd is None:
+        try:
+            import sounddevice as _sd
+        except ImportError as e:
+            raise RuntimeError(
+                "Missing dependency: sounddevice. Run: python -m pip install -r requirements.txt"
+            ) from e
+        sd = _sd
+    return np, sd
+
+
+# â”€â”€ Win32 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class RECT(ctypes.Structure):
     _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
@@ -245,7 +276,7 @@ def _is_browser_exe(exe):
     return low in ("chrome.exe", "msedge.exe", "firefox.exe", "brave.exe",
                    "vivaldi.exe", "opera.exe", "chromium.exe")
 
-# ── Helpers ───────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def is_process_running(exe_path):
     """Check if a process with exact exe name is running."""
@@ -272,11 +303,23 @@ def get_active_profile(cfg):
         return profiles.get(active, next(iter(profiles.values())))
     return cfg
 
+def get_profile(cfg, profile_name=None):
+    profiles = cfg.get("profile", {})
+    if not isinstance(profiles, dict) or not profiles:
+        return None, None
+    if profile_name:
+        return profile_name, profiles.get(profile_name)
+    active = cfg.get("profil_aktywny", "")
+    if active in profiles:
+        return active, profiles[active]
+    name = next(iter(profiles.keys()))
+    return name, profiles[name]
+
 def get_profile_names(cfg):
     p = cfg.get("profile", {})
     return list(p.keys()) if isinstance(p, dict) else []
 
-# ── Launchers ─────────────────────────────────────────────────
+# â”€â”€ Launchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def log(name, msg): print(f"  [{name}] {msg}", flush=True)
 
@@ -293,7 +336,7 @@ def _launch_uwp(exe_path, name):
     Fallback: protocol URI. Last resort: PowerShell AppID discovery."""
     log(name, f"UWP launch: {os.path.basename(exe_path)}")
 
-    # Method 1: subprocess.Popen on the exe directly — works for App Execution Aliases,
+    # Method 1: subprocess.Popen on the exe directly â€” works for App Execution Aliases,
     # exits immediately with code 0 and the real app is launched by Windows infrastructure
     if os.path.exists(exe_path):
         log(name, "Popen on exe (App Execution Alias)")
@@ -333,7 +376,7 @@ def _launch_uwp(exe_path, name):
                       creationflags=0x08000000)
 
 def _build_pattern(name):
-    """Build window-title regex from app name. Uses full name only — first-word
+    """Build window-title regex from app name. Uses full name only â€” first-word
     fallback was too broad (e.g. 'Microsoft' matched Edge, Word, etc.)."""
     return re.escape(name)
 
@@ -347,12 +390,12 @@ def _resolve_exe(exe):
         return exe, _needs_shell(exe)
     found = shutil.which(exe)
     if found: return found, _needs_shell(found)
-    # Not found — assume it's a command name, needs shell
+    # Not found â€” assume it's a command name, needs shell
     return exe, True
 
 def _url_to_app_uri(url):
     """Convert known app HTTPS URLs to native protocol URIs.
-    e.g. https://open.spotify.com/track/xxx → spotify:track:xxx"""
+    e.g. https://open.spotify.com/track/xxx â†’ spotify:track:xxx"""
     if not url: return None
     m = re.match(r'https?://open\.spotify\.com/(\w+)/([a-zA-Z0-9]+)', url)
     if m: return f"spotify:{m.group(1)}:{m.group(2)}"
@@ -389,7 +432,7 @@ def _launch_process(exe, args_str, name):
     already_running = exe and is_process_running(exe)
     eff_exe = os.path.basename(exe).lower() if exe else ""
 
-    # ── Convert known app URLs to native protocol URIs (e.g. spotify:track:xxx) ──
+    # â”€â”€ Convert known app URLs to native protocol URIs (e.g. spotify:track:xxx) â”€â”€
     app_uri = _url_to_app_uri(args_str) if is_url else None
     if app_uri:
         protocol = app_uri.split(":")[0]
@@ -400,7 +443,7 @@ def _launch_process(exe, args_str, name):
         os.startfile(app_uri)
         return None, True, launched_exe or ""
 
-    # ── Protocol URIs (spotify:, msteams:, etc.) — not HTTP URLs ──
+    # â”€â”€ Protocol URIs (spotify:, msteams:, etc.) â€” not HTTP URLs â”€â”€
     if not exe and args_str and not is_url:
         protocol = args_str.split(":")[0]
         launched_exe = _launch_app_by_protocol(protocol, name)
@@ -408,7 +451,7 @@ def _launch_process(exe, args_str, name):
         os.startfile(args_str)
         return None, True, launched_exe or ""
 
-    # ── UWP app (Teams, Calculator, etc.) ──
+    # â”€â”€ UWP app (Teams, Calculator, etc.) â”€â”€
     if is_uwp:
         if already_running:
             log(name, "UWP already running - activating")
@@ -418,7 +461,7 @@ def _launch_process(exe, args_str, name):
         time.sleep(2)
         return None, not already_running, eff_exe
 
-    # ── Browser with URL — always open new window ──
+    # â”€â”€ Browser with URL â€” always open new window â”€â”€
     if is_browser and is_url:
         resolved, _ = _resolve_exe(exe)
         browser = resolved if resolved and os.path.exists(resolved) else _find_browser()
@@ -432,7 +475,7 @@ def _launch_process(exe, args_str, name):
         os.startfile(args_str)
         return None, True, b_exe
 
-    # ── Empty exe + URL — use default browser ──
+    # â”€â”€ Empty exe + URL â€” use default browser â”€â”€
     if not exe and is_url:
         browser = _find_browser()
         b_exe = os.path.basename(browser).lower() if browser else ""
@@ -444,7 +487,7 @@ def _launch_process(exe, args_str, name):
         os.startfile(args_str)
         return None, True, b_exe
 
-    # ── Already running non-browser app with args — new instance ──
+    # â”€â”€ Already running non-browser app with args â€” new instance â”€â”€
     if already_running and args_str:
         log(name, f"already running, new instance with args")
         resolved, needs_shell = _resolve_exe(exe)
@@ -452,12 +495,12 @@ def _launch_process(exe, args_str, name):
         _add_pid(proc.pid)
         return proc, True, eff_exe
 
-    # ── Already running non-browser app without args — just reposition ──
+    # â”€â”€ Already running non-browser app without args â€” just reposition â”€â”€
     if already_running:
         log(name, "already running - looking for window to reposition")
         return None, False, eff_exe
 
-    # ── Fresh launch ──
+    # â”€â”€ Fresh launch â”€â”€
     resolved, needs_shell = _resolve_exe(exe)
     if not resolved:
         log(name, "cannot launch - exe not found"); return None, False, eff_exe
@@ -503,7 +546,7 @@ def launch_app(app):
         if not (ekran > 0 or minimalizuj):
             log(name, "ok"); return
 
-        # ── Resolve exe name for process-based search ──
+        # â”€â”€ Resolve exe name for process-based search â”€â”€
         exe_for_search = effective_exe
         if exe_for_search and not exe_for_search.endswith(".exe"):
             exe_for_search += ".exe"
@@ -649,7 +692,7 @@ def launch_profile(data):
     apps = data.get("aplikacje", []); terms = data.get("terminale", [])
     print(f"\n{'='*40}\n  LAUNCHING WORKSPACE\n{'='*40}\n", flush=True)
 
-    # Phase 1: launch apps with explicit order (kolejnosc > 0) — sequentially
+    # Phase 1: launch apps with explicit order (kolejnosc > 0) â€” sequentially
     ordered = {}
     rest = []
     for a in apps:
@@ -662,7 +705,7 @@ def launch_profile(data):
         for a in ordered[k]: launch_app(a)
 
     # Phase 2: launch remaining apps
-    # Group by executable basename — same exe runs SEQUENTIALLY (prevents window cross-matching)
+    # Group by executable basename â€” same exe runs SEQUENTIALLY (prevents window cross-matching)
     # Different exes run in PARALLEL (fast startup)
     exe_groups = {}
     for a in rest:
@@ -670,7 +713,7 @@ def launch_profile(data):
         if not key:
             args = a.get("argumenty", "")
             if args.startswith("http"):
-                # URL-only entries open in default browser — group with same browser exe
+                # URL-only entries open in default browser â€” group with same browser exe
                 browser = _find_browser()
                 key = os.path.basename(browser).lower() if browser else "_url_"
             else:
@@ -698,7 +741,7 @@ def close_workspace():
     launched_pids.clear()
     print(f"  Closed {closed} processes.", flush=True)
 
-# ── Clap detection (PANNs neural network) ─────────────────────
+# â”€â”€ Clap detection (PANNs neural network) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CLAP_THRESHOLD_SCORE = 0.12  # PANNs confidence threshold (configurable via czulosc_nn)
 TRIGGER_COUNT = 2  # how many events to trigger (overridden by config)
@@ -763,6 +806,7 @@ def get_audioset_labels():
     return _audioset_labels
 
 def rms_db(data):
+    ensure_numpy()
     rms = np.sqrt(np.mean(data.astype(np.float64) ** 2))
     return max(0.0, 20 * math.log10(rms) + 96) if rms > 1e-10 else 0.0
 
@@ -808,7 +852,8 @@ def meter_print(msg):
 
 def wait_for_claps(threshold, callback=None):
     """Listens for impulsive sounds (claps/snaps). Counting is instant (crest factor),
-    NN only verifies AFTER the count is reached — no queue delays."""
+    NN only verifies AFTER the count is reached â€” no queue delays."""
+    ensure_audio_dependencies()
     RATE = 44100; BLOCK = 4096
     NN_WINDOW = RATE // 2
     state = {
@@ -828,7 +873,7 @@ def wait_for_claps(threshold, callback=None):
             meter_print(f"  ! ERROR launching workspace: {e}")
             import traceback; traceback.print_exc()
 
-    # NN verification worker — only runs AFTER count is reached
+    # NN verification worker â€” only runs AFTER count is reached
     def inference_worker():
         while state["running"]:
             try:
@@ -844,7 +889,7 @@ def wait_for_claps(threshold, callback=None):
                     if cooldown_left > 0:
                         meter_print(f"  [!] Cooldown: {cooldown_left:.0f}s remaining")
                     else:
-                        meter_print(f"  >>> NN confirms: {top_label} (score: {score:.2f}) — launching!")
+                        meter_print(f"  >>> NN confirms: {top_label} (score: {score:.2f}) â€” launching!")
                         state["last_trigger"] = time.time()
                         if callback:
                             threading.Thread(target=safe_callback, args=(0,), daemon=True).start()
@@ -907,7 +952,7 @@ def wait_for_claps(threshold, callback=None):
             buf[-n:] = samples
             state["buf_pos"] += n
 
-            # Rising edge + crest factor → instant spike counting (no NN needed)
+            # Rising edge + crest factor â†’ instant spike counting (no NN needed)
             if db >= threshold and state["prev_db"] < threshold and state["buf_pos"] >= RATE:
                 peak = float(np.max(np.abs(samples)))
                 rms_val = float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
@@ -921,7 +966,7 @@ def wait_for_claps(threshold, callback=None):
                         # Schedule NN verification (delayed capture for better audio)
                         state["verify_at"] = state["buf_pos"] + BLOCK
 
-            # Delayed NN verification — only after spike count reached
+            # Delayed NN verification â€” only after spike count reached
             if state["verify_at"] > 0 and state["buf_pos"] >= state["verify_at"]:
                 nn_buf = buf[-NN_WINDOW:].copy()
                 try: inference_q.put_nowait((nn_buf, db, now))
@@ -942,7 +987,7 @@ def wait_for_claps(threshold, callback=None):
     stream.start()
     return stream, state
 
-# ── Voice trigger (Vosk) ─────────────────────────────────────
+# â”€â”€ Voice trigger (Vosk) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 VOSK_MODELS = {
     "pl": ("vosk-model-small-pl-0.22", "https://alphacephei.com/vosk/models/vosk-model-small-pl-0.22.zip"),
@@ -1010,7 +1055,7 @@ def start_voice_trigger(keywords, lang, cooldown_ref, callback):
             state["ready"] = True
             meter_print(f"  Keywords active: {', '.join(kw_list)} ({lang})")
         except Exception as e:
-            meter_print(f"  ! Vosk failed: {e} — voice commands disabled")
+            meter_print(f"  ! Vosk failed: {e} â€” voice commands disabled")
     threading.Thread(target=init_vosk, daemon=True).start()
 
     audio_q = queue.Queue(maxsize=30)
@@ -1063,7 +1108,7 @@ def start_voice_trigger(keywords, lang, cooldown_ref, callback):
                 now = time.time()
                 cd = cooldown_ref[0] - (now - state["last_trigger"])
                 if cd > 0:
-                    meter_print(f"  [mic] \"{text}\" — cooldown: {cd:.0f}s")
+                    meter_print(f"  [mic] \"{text}\" â€” cooldown: {cd:.0f}s")
                 else:
                     meter_print(f"  >>> Voice command: \"{text}\" (keyword: {kw})")
                     state["last_trigger"] = now
@@ -1073,7 +1118,7 @@ def start_voice_trigger(keywords, lang, cooldown_ref, callback):
     threading.Thread(target=voice_worker, daemon=True).start()
 
     def feed_audio(samples_44100):
-        """Called from audio callback — just queues samples, no heavy processing."""
+        """Called from audio callback â€” just queues samples, no heavy processing."""
         if not state.get("ready"):
             return
         try:
@@ -1084,7 +1129,7 @@ def start_voice_trigger(keywords, lang, cooldown_ref, callback):
     state["feed"] = feed_audio
     return state
 
-# ── Hotkey ────────────────────────────────────────────────────
+# â”€â”€ Hotkey â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 MODIFIER_MAP = {"Ctrl": 0x0002, "Alt": 0x0001, "Shift": 0x0004, "Win": 0x0008}
 VK_MAP = {chr(c): c for c in range(0x41, 0x5B)}  # A-Z
@@ -1119,7 +1164,7 @@ def register_hotkey(hotkey_str, callback, hotkey_id=1):
     t = threading.Thread(target=thread, daemon=True); t.start()
     return t
 
-# ── Tray ──────────────────────────────────────────────────────
+# â”€â”€ Tray â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def create_tray(cfg, on_launch, on_close, on_config, on_quit):
     import pystray
@@ -1133,31 +1178,78 @@ def create_tray(cfg, on_launch, on_close, on_config, on_quit):
     items = []
     if names:
         for n in names:
-            items.append(pystray.MenuItem(f"Launch: {n}", lambda _, n=n: on_launch(n)))
+            items.append(pystray.MenuItem(f"Launch: {n}", lambda icon, item, n=n: on_launch(n)))
         items.append(pystray.Menu.SEPARATOR)
     else:
-        items.append(pystray.MenuItem("Launch workspace", lambda: on_launch(None)))
+        items.append(pystray.MenuItem("Launch workspace", lambda icon, item: on_launch(None)))
         items.append(pystray.Menu.SEPARATOR)
 
     items += [
-        pystray.MenuItem("Close workspace", lambda: on_close()),
+        pystray.MenuItem("Close workspace", lambda icon, item: on_close()),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Configuration", lambda: on_config()),
-        pystray.MenuItem("Quit", lambda: on_quit()),
+        pystray.MenuItem("Configuration", lambda icon, item: on_config()),
+        pystray.MenuItem("Quit", lambda icon, item: on_quit()),
     ]
     return pystray.Icon("WorkspaceLauncher", img, "Workspace Launcher", pystray.Menu(*items))
 
-# ── Main ──────────────────────────────────────────────────────
+# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-def main():
-    if not os.path.exists(CONFIG_PATH):
-        ce = os.path.join(BASE_DIR, "WorkspaceConfig.exe")
-        if os.path.exists(ce): os.startfile(ce)
-        else: print("Missing workspace-config.json!")
-        input("Enter..."); sys.exit(0)
+def print_monitors():
+    mons = get_monitors()
+    print(f"Monitors ({len(mons)}):", flush=True)
+    for i, (mx, my, mw, mh) in enumerate(mons):
+        print(f"  [{i+1}] pos=({mx},{my}) size={mw}x{mh}", flush=True)
 
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f: cfg = json.load(f)
+def print_audio_devices():
+    print("  Audio devices (input):", flush=True)
+    try:
+        devices = sd.query_devices()
+        default_in = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
+        found_any = False
+        for i, d in enumerate(devices):
+            if d["max_input_channels"] > 0:
+                marker = " <<< ACTIVE" if i == default_in else ""
+                print(f"    [{i}] {d['name']} (ch:{d['max_input_channels']}, {int(d['default_samplerate'])}Hz){marker}", flush=True)
+                found_any = True
+        if not found_any:
+            print("    ! No input devices - microphone will not be detected!", flush=True)
+    except Exception as e:
+        print(f"    ! Error listing devices: {e}", flush=True)
 
+def open_config():
+    config_exe = os.path.join(BASE_DIR, "WorkspaceConfig.exe")
+    config_py = os.path.join(BASE_DIR, "config_gui.py")
+    if os.path.exists(config_exe):
+        os.startfile(config_exe)
+        return 0
+    if os.path.exists(config_py):
+        subprocess.Popen([sys.executable, config_py], cwd=BASE_DIR)
+        return 0
+    print("Configuration tool not found. Expected WorkspaceConfig.exe or config_gui.py.", flush=True)
+    return 1
+
+def launch_profile_once(cfg, profile_name=None):
+    name, data = get_profile(cfg, profile_name)
+    if profile_name and data is None:
+        names = ", ".join(get_profile_names(cfg)) or "(none)"
+        print(f"Unknown profile '{profile_name}'. Available: {names}", flush=True)
+        return 2
+    if not data:
+        print("No profiles configured. Open the configurator with: python workspace.py --config", flush=True)
+        return 2
+
+    apps = data.get("aplikacje", [])
+    terms = data.get("terminale", [])
+    if not apps and not terms:
+        print(f"No apps or terminals configured in profile '{name}'.", flush=True)
+        print("Open the configurator with: python workspace.py --config", flush=True)
+        return 2
+
+    print(f"  >>> Profile: {name}", flush=True)
+    launch_profile(data)
+    return 0
+
+def run_tray(cfg):
     global CLAP_THRESHOLD_SCORE, TRIGGER_LABELS, TRIGGER_COUNT, TRIGGER_COOLDOWN
     threshold = cfg.get("czulosc_klasniecia", 70)
     CLAP_THRESHOLD_SCORE = cfg.get("czulosc_nn", CLAP_THRESHOLD_SCORE)
@@ -1166,56 +1258,42 @@ def main():
     TRIGGER_COUNT = cfg.get("liczba_zdarzen", 2)
     TRIGGER_COOLDOWN = cfg.get("cooldown", 3)
     hotkey_str = cfg.get("hotkey", "Win+Shift+W")
-    profile = get_active_profile(cfg)
-    apps = profile.get("aplikacje", []); terms = profile.get("terminale", [])
-    if not apps and not terms: print("No apps configured!"); input("Enter..."); sys.exit(0)
+    active_name, profile = get_profile(cfg)
+    apps = profile.get("aplikacje", []) if profile else []
+    terms = profile.get("terminale", []) if profile else []
+    if not apps and not terms:
+        print(f"No apps or terminals configured in profile '{active_name or 'Default'}'.", flush=True)
+        print("Open the configurator with: python workspace.py --config", flush=True)
+        return 2
+
+    try:
+        ensure_audio_dependencies()
+    except RuntimeError as e:
+        print(f"Cannot start microphone listener: {e}", flush=True)
+        return 1
 
     pnames = get_profile_names(cfg)
     print(f"{'='*40}\n  Workspace Launcher\n{'='*40}")
     print(f"  Sensitivity: {threshold} dB | NN threshold: {CLAP_THRESHOLD_SCORE} | Hotkey: {hotkey_str}")
     print(f"  Trigger: {trigger_sound} x{TRIGGER_COUNT} | Cooldown: {TRIGGER_COOLDOWN}s")
-    if pnames: print(f"  Profiles: {', '.join(pnames)} | Active: {cfg.get('profil_aktywny', pnames[0])}")
+    if pnames:
+        print(f"  Profiles: {', '.join(pnames)} | Active: {active_name}")
     print(f"  Apps: {len(apps)} | Terminals: {len(terms)}")
-    print(f"  Detection: spectral analysis (distinguishes claps from speech/music)")
+    print("  Detection: spectral analysis (distinguishes claps from speech/music)")
     print(f"{'-'*40}", flush=True)
-
-    # List monitors
-    mons = get_monitors()
-    print(f"  Monitors ({len(mons)}):", flush=True)
-    for i, (mx, my, mw, mh) in enumerate(mons):
-        print(f"    [{i+1}] pos=({mx},{my}) size={mw}x{mh}", flush=True)
-
-    # List audio input devices for debugging
-    print("  Audio devices (input):", flush=True)
-    try:
-        devices = sd.query_devices()
-        default_in = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
-        found_any = False
-        for i, d in enumerate(devices):
-            if d['max_input_channels'] > 0:
-                marker = " <<< ACTIVE" if i == default_in else ""
-                print(f"    [{i}] {d['name']} (ch:{d['max_input_channels']}, {int(d['default_samplerate'])}Hz){marker}", flush=True)
-                found_any = True
-        if not found_any:
-            print("    ! No input devices - microphone will not be detected!", flush=True)
-    except Exception as e:
-        print(f"    ! Error listing devices: {e}", flush=True)
+    print_monitors()
+    print_audio_devices()
     print(f"{'-'*40}", flush=True)
 
     lock = threading.Lock()
     def do_launch(name=None):
         with lock:
-            data = cfg["profile"][name] if name and name in cfg.get("profile", {}) else get_active_profile(cfg)
-            meter_print(f"\n  >>> Profile: {name or 'default'}")
-            launch_profile(data)
-    def do_close(): meter_print("  >>> Closing..."); close_workspace()
-    def do_config():
-        ce = os.path.join(BASE_DIR, "WorkspaceConfig.exe")
-        if os.path.exists(ce): os.startfile(ce)
+            launch_profile_once(cfg, name)
+    def do_close():
+        meter_print("  >>> Closing...")
+        close_workspace()
 
-    # Voice trigger (optional) — init AFTER audio stream to not block startup
     voice_state = None
-    voice_feed = None
     voice_keywords = cfg.get("slowa_kluczowe", "").strip()
     voice_lang = cfg.get("jezyk_mowy", "en")
     cooldown_ref = [TRIGGER_COOLDOWN]
@@ -1226,25 +1304,55 @@ def main():
     register_hotkey(hotkey_str, lambda: do_launch())
     print(f"  Hotkey {hotkey_str} registered.", flush=True)
 
-    # Voice trigger — started AFTER everything else so crash doesn't block startup
     if voice_keywords:
-        print(f"  Voice command: \"{voice_keywords}\" ({voice_lang}) — loading in background...", flush=True)
+        print(f"  Voice command: \"{voice_keywords}\" ({voice_lang}) - loading in background...", flush=True)
         voice_state = start_voice_trigger(voice_keywords, voice_lang, cooldown_ref, lambda: do_launch())
-        # Connect voice feed to existing audio stream
         def _voice_feeder(samples):
             f = voice_state.get("feed")
-            if f: f(samples)
+            if f:
+                f(samples)
         clap_state["voice_feed"] = _voice_feeder
     else:
         print("  Voice command: disabled", flush=True)
 
     tray = [None]
     def on_quit():
-        clap_state["running"] = False; stream.stop()
-        if voice_state: voice_state["running"] = False
-        if tray[0]: tray[0].stop()
-    tray[0] = create_tray(cfg, do_launch, do_close, do_config, on_quit)
+        clap_state["running"] = False
+        stream.stop()
+        if voice_state:
+            voice_state["running"] = False
+        if tray[0]:
+            tray[0].stop()
+    tray[0] = create_tray(cfg, do_launch, do_close, open_config, on_quit)
     print("  Tray icon active.\n", flush=True)
     tray[0].run()
+    return 0
 
-if __name__ == "__main__": main()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Workspace Launcher")
+    parser.add_argument("--launch", nargs="?", const="", default=None, metavar="PROFILE",
+                        help="Launch a profile once and exit. Omit PROFILE to use the active profile.")
+    parser.add_argument("--config", action="store_true", help="Open the configuration GUI.")
+    parser.add_argument("--list-monitors", action="store_true", help="List detected monitors and exit.")
+    args = parser.parse_args(argv)
+
+    if args.config:
+        return open_config()
+    if args.list_monitors:
+        print_monitors()
+        return 0
+
+    cfg = load_config(CONFIG_PATH)
+    if cfg is None:
+        print(f"Missing configuration file: {CONFIG_PATH}", flush=True)
+        open_config()
+        return 1
+
+    if args.launch is not None:
+        profile_name = args.launch or None
+        return launch_profile_once(cfg, profile_name)
+
+    return run_tray(cfg)
+
+if __name__ == "__main__":
+    sys.exit(main())

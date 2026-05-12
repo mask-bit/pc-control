@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Assistente Inteligente",
+  "version": "0.1.0",
+  "identifier": "br.com.assistente.inteligente",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Assistente Inteligente",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 700
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Assistente inteligente local com IA e Spotify",
+    "longDescription": "Aplicativo desktop em portugues-BR para conversar com IA, executar acoes locais, controlar Spotify e criar rotinas."
+  }
+}

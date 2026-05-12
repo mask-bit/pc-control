@@ -10,7 +10,28 @@
   "profil_aktywny": "Domyslny",
   "profile": {
     "Domyslny": {
-      "aplikacje": [],
+      "aplikacje": [
+        {
+          "nazwa": "Codex",
+          "exe": "shell:AppsFolder\\OpenAI.Codex!App",
+          "argumenty": "",
+          "ekran": 1,
+          "polowa": "",
+          "warstwa": "Normal",
+          "kolejnosc": 0,
+          "minimalizuj": false
+        },
+        {
+          "nazwa": "Spotify",
+          "exe": "",
+          "argumenty": "https://open.spotify.com/playlist/5WsVwbOK5XJrQx7JiTmQqU?si=bb27c51dc3a64d6e",
+          "ekran": 1,
+          "polowa": "",
+          "warstwa": "Normal",
+          "kolejnosc": 0,
+          "minimalizuj": false
+        }
+      ],
       "terminale": []
     }
   }

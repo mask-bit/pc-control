@@ -2,11 +2,27 @@
 dist/
 build/
 *.spec
+node_modules/
+target/
+.vite/
+vite-dev*.log
+assistant_logs.jsonl
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
 
 # Claude Code workspace settings
 .claude/
@@ -22,6 +38,8 @@ _term_*.bat
 # ML models (downloaded at runtime)
 *.pth
 *.tflite
+vosk_models/
+*.zip
 
 # IDE
 .vscode/

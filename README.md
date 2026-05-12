@@ -1,261 +1,139 @@
-# Workspace Launcher
+# Jarvis Assistant
 
-Automatic work environment launcher for Windows. Launches configured apps, browsers and terminals, placing them on selected monitors — all with a single gesture.
+Assistente local de controle por voz para Windows, em portugues-BR. O foco do projeto e transformar fala em comandos reais para o PC: abrir aplicativos, sites, pastas, pesquisar, controlar Spotify, ajustar volume e executar rotinas.
 
-**Launch methods:**
-- Double clap (sound detection with PANNs CNN14 neural network)
-- Voice command (offline speech recognition via Vosk)
-- Keyboard shortcut (e.g. `Win+Shift+W`)
-- System tray icon
+O app principal e o core Python com Vosk offline. O prototipo Tauri em `assistant-desktop/` existe apenas como experimento visual.
 
----
+## Status
 
-## Features
+Alpha funcional.
 
-- **Profiles** — prepare different app sets (e.g. "Work", "Home", "Project X") and switch between them
-- **Window positioning** — assign apps to specific monitors, screen halves (left/right) and layers (on top / behind)
-- **Smart launching** — detects already running apps and just repositions them instead of launching again
-- **Sound recognition** — PANNs CNN14 neural network classifies sounds (clapping, snapping, whistling, knocking and more)
-- **Voice command** — offline, no data sent to the cloud (Vosk model)
-- **UWP support** — automatically detects and launches Microsoft Store apps (Teams, Spotify etc.)
-- **Configuration GUI** — graphical editor for profiles, apps and settings (customtkinter)
-- **Autostart** — optional launch at Windows startup
+- Core Python real: ativo.
+- Voz offline com Vosk: ativo.
+- Hotkey + wake words: ativo.
+- Executor local Windows: ativo.
+- Spotify por URI, busca e teclas de midia: ativo.
+- Tauri/React: experimental.
 
----
+## Quickstart
 
-## Requirements
-
-- **Windows 10/11**
-- **Python 3.10+** (to run from source)
-- **Microphone** (for clap detection and voice commands)
-- Optionally: **Git Bash**, **AutoHotkey v2**
-
----
-
-## Installation
-
-### Option A: From source (recommended for developers)
-
-```bash
-# Clone the repository
-git clone https://github.com/YOUR-USER/workspace-launcher.git
-cd workspace-launcher
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the configurator
-python config_gui.py
-
-# Run the launcher
-python workspace.py
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -r requirements.txt
+python assistant_panel.py
 ```
 
-### Option B: Compiled .exe
+Ou rode:
 
-```bash
-# Build .exe files
-build.bat
-
-# Output in dist/ folder:
-#   WorkspaceLauncher.exe  — main application
-#   workspace-config.json  — configuration
+```bat
+start-jarvis.bat
 ```
 
-Copy `dist/WorkspaceLauncher.exe` + `dist/workspace-config.json` to any computer — no Python required.
+Na primeira execucao de voz, o app baixa o modelo Vosk portugues `vosk-model-small-pt-0.3`.
 
----
+## Comandos de exemplo
 
-## Usage
-
-### 1. Configuration (GUI)
-
-Run the configurator:
-
-```bash
-python config_gui.py
-# or
-WorkspaceConfig.exe
+```text
+abre o Chrome
+abre YouTube
+pesquisa Python no Google
+toca playlist foco
+pausa Spotify
+proxima musica
+aumenta volume
+ativar modo estudo
+listar comandos
 ```
 
-In the configurator:
-- **"Apps" tab** — add apps from the installed programs list or browse for .exe
-- **"Terminals" tab** — add terminals (Git Bash, PowerShell, CMD, Windows Terminal) with startup commands
-- **"Settings" tab** — set microphone sensitivity, keyboard shortcut, trigger sound, voice commands
+## Build Windows
 
-For each app/terminal you can set:
-| Option | Description |
-|--------|-------------|
-| Screen | Monitor number (1, 2, 3...) |
-| Position | `full`, `left` half, `right` half |
-| Layer | `Normal`, `On top`, `Behind` |
-| Order | Launch priority (higher = earlier) |
-| Minimize | Launch minimized |
-
-### 2. Running the launcher
-
-```bash
-python workspace.py
-# or
-WorkspaceLauncher.exe
-```
-
-The application:
-1. Starts in the system tray
-2. Loads the sound recognition model (~80 MB, one-time)
-3. Listens on the microphone — displays volume bar in the console
-4. After detecting a double clap (or hotkey/voice command) launches the active profile
-
-### 3. Triggering workspace
-
-| Method | Default setting |
-|--------|-----------------|
-| Clap | 2x hand clap |
-| Hotkey | `Win+Shift+W` |
-| Voice command | Set in configuration (e.g. "launch") |
-| Tray icon | Right-click > "Launch: [profile]" |
-
-### 4. Tray menu
-
-Right-click the tray icon:
-- **Launch: [profile]** — launch selected profile
-- **Close workspace** — close all launched processes
-- **Configuration** — open configuration GUI
-- **Quit** — close Workspace Launcher
-
----
-
-## Configuration (JSON)
-
-The `workspace-config.json` file is created automatically by the GUI. Example configuration:
-
-```json
-{
-  "czulosc_klasniecia": 70,
-  "hotkey": "Win+Shift+W",
-  "zdarzenie_dzwiekowe": "Clapping",
-  "liczba_zdarzen": 2,
-  "cooldown": 3,
-  "czulosc_nn": 0.12,
-  "slowa_kluczowe": "launch",
-  "jezyk_mowy": "en",
-  "profil_aktywny": "Work",
-  "profile": {
-    "Work": {
-      "aplikacje": [
-        {
-          "nazwa": "VS Code",
-          "exe": "code",
-          "argumenty": "C:\\Projects\\my-app",
-          "ekran": 1,
-          "polowa": "",
-          "warstwa": "Normal",
-          "kolejnosc": 0,
-          "minimalizuj": false
-        }
-      ],
-      "terminale": [
-        {
-          "nazwa": "Dev Server",
-          "terminal_typ": "Git Bash",
-          "folder": "C:\\Projects\\my-app",
-          "komenda": "npm run dev",
-          "ekran": 2,
-          "polowa": "right",
-          "warstwa": "On top"
-        }
-      ]
-    }
-  }
-}
-```
-
-Full example in [`workspace-config.example.json`](workspace-config.example.json).
-
-### Configuration options
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `czulosc_klasniecia` | int (40-95) | Microphone volume threshold in dB |
-| `hotkey` | string | Keyboard shortcut, e.g. `Win+Shift+W`, `Ctrl+Alt+S` |
-| `zdarzenie_dzwiekowe` | string | Sound type: `Clapping`, `Finger snapping`, `Whistling`, `Knock`, `Bell` etc. |
-| `liczba_zdarzen` | int (1-3) | How many times to repeat the sound to trigger |
-| `cooldown` | int (0-30) | Pause between launches in seconds |
-| `czulosc_nn` | float (0.05-0.50) | Neural network confidence threshold (lower = more sensitive) |
-| `slowa_kluczowe` | string | Voice commands separated by commas (empty = disabled) |
-| `jezyk_mowy` | string | Speech recognition language: `pl` or `en` |
-
----
-
-## Additional scripts
-
-| File | Description |
-|------|-------------|
-| `clap-trigger.py` | Standalone clap trigger (simple, no neural network) |
-| `voice-trigger.py` | Standalone voice trigger (Google Speech Recognition) |
-| `workspace-launcher.ps1` | PowerShell launcher (independent of Python) |
-| `workspace-hotkey.ahk` | AutoHotkey v2 shortcuts (`Ctrl+Alt+W`, `Ctrl+Alt+P`) |
-| `create-shortcut.vbs` | Creates Windows startup shortcut |
-| `build.bat` | Compiles .exe using PyInstaller |
-
-### Standalone clap trigger
-
-```bash
-# Listen for double clap
-python clap-trigger.py
-
-# Calibration mode — check microphone level
-python clap-trigger.py --calibrate
-
-# Change threshold and profile
-python clap-trigger.py --threshold 65 --profile praca --debug
-```
-
----
-
-## Building .exe
-
-```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build WorkspaceLauncher.exe (console)
-pyinstaller --onefile --name WorkspaceLauncher --console workspace.py
-
-# Build WorkspaceConfig.exe (no console)
-pyinstaller --onefile --name WorkspaceConfig --windowed config_gui.py
-```
-
-Or use the ready-made script:
-
-```bash
+```bat
 build.bat
 ```
 
----
+Saida:
 
-## Project structure
-
-```
-workspace-launcher/
-├── workspace.py              # Main application (tray + detection + launcher)
-├── config_gui.py             # Configuration GUI
-├── clap-trigger.py           # Standalone clap trigger
-├── voice-trigger.py          # Standalone voice trigger
-├── workspace-launcher.ps1    # PowerShell launcher
-├── workspace-hotkey.ahk      # AutoHotkey v2 shortcuts
-├── workspace-config.json     # Configuration (created by GUI)
-├── workspace-config.example.json  # Example configuration
-├── build.bat                 # Build script for .exe
-├── create-shortcut.vbs       # Startup shortcut creation
-├── create-startup-shortcut.ps1
-├── clap-trigger-startup.bat
-├── requirements.txt          # Python dependencies
-└── .gitignore
+```text
+dist\JarvisAssistant.exe
+dist\WorkspaceLauncher.exe
+dist\WorkspaceConfig.exe
+dist\assistant_config.json
+dist\workspace-config.json
 ```
 
----
+## Estrutura
 
-## License
+```text
+assistant_panel.py        Painel principal do assistente de voz
+voice_engine.py           Microfone, Vosk, wake words e hotkey
+intent_parser.py          Parser local de comandos em portugues-BR
+command_router.py         Orquestrador seguro de intencoes e acoes
+local_executor.py         Executor Windows: apps, sites, pastas, volume, clipboard
+spotify_controller.py     Controle Spotify por URI, busca e teclas de midia
+assistant_config.json     Configuracao do assistente
+workspace.py              Launcher legado e compatibilidade
+config_gui.py             Configurador legado
+assistant-desktop/        Prototipo visual Tauri/React experimental
+docs/                     Documentacao tecnica
+tests/                    Testes automatizados
+```
 
-MIT
+## Arquitetura
+
+```mermaid
+flowchart LR
+  Mic["Microfone / hotkey / wake word"] --> Voice["voice_engine.py"]
+  Voice --> Parser["intent_parser.py"]
+  Parser --> Router["command_router.py"]
+  Router --> Exec["local_executor.py"]
+  Router --> Spotify["spotify_controller.py"]
+  Router --> Logs["assistant_logs.jsonl"]
+  Panel["assistant_panel.py"] --> Voice
+  Config["assistant_config.json"] --> Parser
+  Config --> Router
+```
+
+## Configuracao
+
+Edite `assistant_config.json` para adicionar apps, sites, pastas, playlists e rotinas.
+
+OpenAI e opcional. Se `usar_openai` for ativado, defina a chave via variavel de ambiente:
+
+```bat
+set OPENAI_API_KEY=sk-sua-chave
+```
+
+Sem OpenAI, os comandos essenciais continuam funcionando pelo parser local.
+
+## Validacao
+
+```bat
+python -m py_compile assistant_panel.py voice_engine.py intent_parser.py command_router.py local_executor.py spotify_controller.py workspace.py config_gui.py config_utils.py clap-trigger.py voice-trigger.py
+python -m pytest
+```
+
+Para tooling de desenvolvimento:
+
+```bat
+python -m pip install -r requirements-dev.txt
+```
+
+## Documentacao
+
+- [Arquitetura](docs/ARCHITECTURE.md)
+- [Setup](docs/SETUP.md)
+- [Comandos](docs/COMMANDS.md)
+- [Modelo de seguranca](docs/SECURITY_MODEL.md)
+- [Release](docs/RELEASE.md)
+- [Roadmap](ROADMAP.md)
+
+## Seguranca
+
+O app executa acoes locais no computador, entao o projeto evita shell livre no MVP. Comandos desconhecidos falham de forma segura, acoes sensiveis devem pedir confirmacao e logs locais sao ignorados pelo Git.
+
+Veja [SECURITY.md](SECURITY.md).
+
+## Licenca
+
+MIT. Veja [LICENSE](LICENSE).

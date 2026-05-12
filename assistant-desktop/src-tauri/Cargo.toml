@@ -1,0 +1,32 @@
+[package]
+name = "assistente-inteligente"
+version = "0.1.0"
+description = "Assistente inteligente de desktop com IA e Spotify"
+authors = ["Workspace Launcher"]
+edition = "2021"
+
+[lib]
+name = "assistente_inteligente_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = "3"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+keyring = "3"
+open = "5"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sysinfo = "0.33"
+tauri = { version = "2", features = ["tray-icon"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+url = "2"
+urlencoding = "2"
+uuid = { version = "1", features = ["v4", "serde"] }

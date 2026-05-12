@@ -30,19 +30,19 @@ except ImportError:
 
 # Map voice commands to profiles
 VOICE_COMMANDS = {
-    # Keywords (lowercase) -> profile in workspace-launcher.ps1
-    "uruchom workspace": "default",
-    "start workspace": "default",
-    "workspace domyslny": "default",
-    "uruchom prace": "praca",
-    "start praca": "praca",
-    "workspace praca": "praca",
+    # Keywords (lowercase) -> profile in workspace.py. Empty means active profile.
+    "uruchom workspace": "",
+    "start workspace": "",
+    "workspace domyslny": "",
+    "uruchom prace": "",
+    "start praca": "",
+    "workspace praca": "",
 }
 
-# Path to PowerShell script
+# Path to Python launcher
 LAUNCHER_SCRIPT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "workspace-launcher.ps1"
+    "workspace.py"
 )
 
 # Speech recognition language (pl-PL = Polish, en-US = English)
@@ -52,14 +52,11 @@ LANGUAGE = "pl-PL"
 
 
 def launch_workspace(profile: str):
-    """Launch PowerShell script with the given profile."""
-    print(f"\n>>> Launching workspace with profile: {profile}")
-    cmd = [
-        "powershell.exe",
-        "-ExecutionPolicy", "Bypass",
-        "-File", LAUNCHER_SCRIPT,
-        "-Profile", profile
-    ]
+    """Launch workspace.py with the given profile."""
+    print(f"\n>>> Launching workspace with profile: {profile or 'active profile'}")
+    cmd = [sys.executable, LAUNCHER_SCRIPT, "--launch"]
+    if profile:
+        cmd.append(profile)
     subprocess.Popen(cmd)
 
 
@@ -95,7 +92,7 @@ def main():
     print()
     print("Available voice commands:")
     for cmd, profile in VOICE_COMMANDS.items():
-        print(f"  '{cmd}' -> profile: {profile}")
+        print(f"  '{cmd}' -> profile: {profile or 'active profile'}")
     print()
 
     # Microphone calibration

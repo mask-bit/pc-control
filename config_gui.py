@@ -1,8 +1,9 @@
 """Workspace Launcher - Configuration"""
 
-import ctypes, ctypes.wintypes, json, os, shutil, subprocess, sys, winreg
+import ctypes, ctypes.wintypes, json, os, re, shutil, subprocess, sys, winreg
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+from config_utils import DEFAULT_CONFIG, normalize_config
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -358,13 +359,55 @@ def show_welcome(parent):
 
 WARSTWY = ["Normal", "On top", "Behind"]
 TERM_TYPES = ["Git Bash", "PowerShell", "CMD", "Windows Terminal"]
+SPOTIFY_HTTP_RE = re.compile(r"^https://open\.spotify\.com/(playlist|album|track|artist)/[A-Za-z0-9]+(?:[/?#].*)?$", re.I)
+SPOTIFY_URI_RE = re.compile(r"^spotify:(playlist|album|track|artist):[A-Za-z0-9]+$", re.I)
+
+def is_spotify_link(value):
+    value = (value or "").strip()
+    return bool(SPOTIFY_HTTP_RE.match(value) or SPOTIFY_URI_RE.match(value))
+
+def _vbs_escape(value):
+    return str(value).replace('"', '""')
+
+def _launcher_autostart_command():
+    exe = os.path.join(BASE_DIR, "WorkspaceLauncher.exe")
+    if os.path.exists(exe):
+        return exe, ""
+
+    script = os.path.join(BASE_DIR, "workspace.py")
+    py_dir = os.path.dirname(sys.executable)
+    pythonw = os.path.join(py_dir, "pythonw.exe")
+    target = pythonw if os.path.exists(pythonw) else sys.executable
+    return target, f'"{script}"'
+
+def _write_startup_shortcut(shortcut_path):
+    target, args = _launcher_autostart_command()
+    if not os.path.exists(target):
+        raise FileNotFoundError(target)
+    vp = os.path.join(BASE_DIR, "_t.vbs")
+    with open(vp, "w", encoding="utf-8") as fv:
+        fv.write(
+            'Set s=CreateObject("WScript.Shell").CreateShortcut("'
+            + _vbs_escape(shortcut_path) + '")\n'
+            + 's.TargetPath="' + _vbs_escape(target) + '"\n'
+            + 's.Arguments="' + _vbs_escape(args) + '"\n'
+            + 's.WorkingDirectory="' + _vbs_escape(BASE_DIR) + '"\n'
+            + 's.WindowStyle=7\n'
+            + 's.Save\n'
+        )
+    try:
+        subprocess.run(["cscript", "//nologo", vp], check=True)
+    finally:
+        try: os.remove(vp)
+        except: pass
 
 def main():
     mons = get_monitors(); mc = max(len(mons), 1)
-    cfg = {"czulosc_klasniecia": 70, "aplikacje": [], "terminale": []}
+    cfg, _ = normalize_config(DEFAULT_CONFIG)
     first_run = not os.path.exists(CONFIG_PATH)
     if not first_run:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f: cfg = json.load(f)
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg, _ = normalize_config(json.load(f))
     installed = scan_installed_apps()
 
     root = ctk.CTk()
@@ -442,6 +485,7 @@ def main():
     # ── Tabs ──
     tabs = ctk.CTkTabview(root, corner_radius=10)
     tabs.pack(fill="both", expand=True, padx=20, pady=(0, 5))
+    tab_control = tabs.add("Control Panel")
     tab_apps = tabs.add("Apps")
     tab_term = tabs.add("Terminals")
     tab_set = tabs.add("Settings")
@@ -450,6 +494,9 @@ def main():
     app_scroll = ctk.CTkScrollableFrame(tab_apps, fg_color="transparent")
     app_scroll.pack(fill="both", expand=True)
     app_cards = []
+
+    def refresh_control_panel():
+        pass
 
     def add_app(data=None):
         if data is None: data = {}
@@ -470,7 +517,10 @@ def main():
         exe_name = os.path.basename(exe_val) if exe_val else "not selected"
         ctk.CTkLabel(top, text=exe_name, text_color="#666", font=("Segoe UI", 11)).pack(side="left", padx=(10, 0))
 
-        def rm(): card.destroy(); app_cards.remove(w)
+        def rm():
+            card.destroy()
+            app_cards.remove(w)
+            refresh_control_panel()
         ctk.CTkButton(top, text="✕", width=32, height=32, fg_color="#c0392b", hover_color="#e74c3c",
                        font=("Segoe UI", 14), command=rm).pack(side="right")
 
@@ -565,11 +615,13 @@ def main():
         data = current_profile["data"].get(new_name, {})
         for a in data.get("aplikacje", []): add_app(a)
         for t in data.get("terminale", []): add_term(t)
+        refresh_control_panel()
 
     def on_add():
         picked = pick_app(root, installed)
         if not picked: return
         add_app({"nazwa": picked["name"], "exe": picked["exe"], "ekran": 1})
+        refresh_control_panel()
 
     # ═══════════ TAB: Terminale ═══════════
     ctk.CTkLabel(tab_term, text="Open terminal in selected folder and run command",
@@ -596,7 +648,10 @@ def main():
         ctk.CTkOptionMenu(top, variable=tv, values=TERM_TYPES, width=150, height=30).pack(side="left")
         tw["terminal_typ"] = tv
 
-        def rm(): card.destroy(); term_cards.remove(tw)
+        def rm():
+            card.destroy()
+            term_cards.remove(tw)
+            refresh_control_panel()
         ctk.CTkButton(top, text="✕", width=32, height=32, fg_color="#c0392b", hover_color="#e74c3c",
                        font=("Segoe UI", 14), command=rm).pack(side="right")
 
@@ -646,10 +701,77 @@ def main():
 
     for t in active_data.get("terminale", []): add_term(t)
 
-    ctk.CTkButton(tab_term, text="+ Add terminal", command=add_term, width=160, height=36,
+    def on_add_term():
+        add_term()
+        refresh_control_panel()
+
+    ctk.CTkButton(tab_term, text="+ Add terminal", command=on_add_term, width=160, height=36,
                    fg_color="#444", hover_color="#555").pack(anchor="w", padx=8, pady=(10, 0))
 
     # ═══════════ TAB: Ustawienia ═══════════
+    # Control Panel
+    control_scroll = ctk.CTkScrollableFrame(tab_control, fg_color="transparent")
+    control_scroll.pack(fill="both", expand=True)
+
+    control_overview = ctk.CTkFrame(control_scroll, corner_radius=10)
+    control_overview.pack(fill="x", padx=8, pady=(8, 10))
+    ctk.CTkLabel(control_overview, text="Control Panel", font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(12, 2))
+    control_profile_label = ctk.CTkLabel(control_overview, text="", text_color="#888")
+    control_profile_label.pack(anchor="w", padx=16, pady=(0, 2))
+    control_summary_label = ctk.CTkLabel(control_overview, text="", text_color="#888")
+    control_summary_label.pack(anchor="w", padx=16, pady=(0, 12))
+
+    quick_frame = ctk.CTkFrame(control_scroll, corner_radius=10)
+    quick_frame.pack(fill="x", padx=8, pady=(0, 10))
+    ctk.CTkLabel(quick_frame, text="Quick add", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=16, pady=(12, 8))
+    quick_buttons = ctk.CTkFrame(quick_frame, fg_color="transparent")
+    quick_buttons.pack(fill="x", padx=16, pady=(0, 14))
+    ctk.CTkButton(quick_buttons, text="Add App", command=lambda: on_add(), width=120, height=34,
+                   fg_color="#444", hover_color="#555").pack(side="left", padx=(0, 8))
+    ctk.CTkButton(quick_buttons, text="Add Terminal", command=lambda: on_add_term(), width=140, height=34,
+                   fg_color="#444", hover_color="#555").pack(side="left", padx=(0, 8))
+    ctk.CTkButton(quick_buttons, text="Save", command=lambda: save(), width=100, height=34).pack(side="right")
+
+    spotify_frame = ctk.CTkFrame(control_scroll, corner_radius=10)
+    spotify_frame.pack(fill="x", padx=8, pady=(0, 10))
+    ctk.CTkLabel(spotify_frame, text="Spotify", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=16, pady=(12, 2))
+    ctk.CTkLabel(spotify_frame, text="Paste a Spotify playlist, album, track, or artist link.",
+                 text_color="#888").pack(anchor="w", padx=16, pady=(0, 8))
+    spotify_row = ctk.CTkFrame(spotify_frame, fg_color="transparent")
+    spotify_row.pack(fill="x", padx=16, pady=(0, 8))
+    spotify_var = ctk.StringVar()
+    ctk.CTkEntry(spotify_row, textvariable=spotify_var, height=34,
+                  placeholder_text="https://open.spotify.com/playlist/...").pack(side="left", fill="x", expand=True, padx=(0, 8))
+    spotify_status_label = ctk.CTkLabel(spotify_frame, text="", text_color="#888")
+    spotify_status_label.pack(anchor="w", padx=16, pady=(0, 12))
+
+    def refresh_control_panel():
+        control_profile_label.configure(text=f"Active profile: {current_profile['name']}")
+        control_summary_label.configure(text=f"{len(app_cards)} apps | {len(term_cards)} terminals")
+
+    def add_spotify_from_control():
+        link = spotify_var.get().strip()
+        if not is_spotify_link(link):
+            spotify_status_label.configure(text="Use an open.spotify.com link or spotify: playlist/album/track/artist URI.", text_color="#e67e22")
+            messagebox.showwarning("Spotify", "Paste a valid Spotify playlist, album, track, or artist link.")
+            return
+        add_app({
+            "nazwa": "Spotify",
+            "exe": "",
+            "argumenty": link,
+            "ekran": 1,
+            "polowa": "",
+            "warstwa": "Normal",
+            "kolejnosc": 0,
+            "minimalizuj": False,
+        })
+        spotify_var.set("")
+        spotify_status_label.configure(text="Spotify added to Apps.", text_color="#2ecc71")
+        refresh_control_panel()
+
+    ctk.CTkButton(spotify_row, text="Add Spotify", command=add_spotify_from_control, width=130, height=34).pack(side="left")
+    refresh_control_panel()
+
     set_scroll = ctk.CTkScrollableFrame(tab_set, fg_color="transparent")
     set_scroll.pack(fill="both", expand=True)
 
@@ -738,7 +860,7 @@ def main():
         os.path.join(os.environ.get("APPDATA",""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "WorkspaceLauncher.lnk")))
     ctk.CTkCheckBox(auto_frame, text="Start automatically with Windows",
                      variable=auto_var).pack(padx=16, pady=12, anchor="w")
-    ctk.CTkLabel(auto_frame, text="WorkspaceLauncher.exe waits in background (tray icon) for clap or hotkey Win+Shift+W.",
+    ctk.CTkLabel(auto_frame, text="Workspace Launcher waits in background (tray icon) for clap or hotkey Win+Shift+W.",
                  text_color="#888").pack(padx=16, pady=(0, 12), anchor="w")
 
     # ── Voice trigger settings ──
@@ -786,7 +908,7 @@ def main():
         if not p: return
         try:
             with open(p, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data, _ = normalize_config(json.load(f))
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             messagebox.showinfo("Import", "Configuration imported!\nRestart WorkspaceConfig to see changes.")
@@ -841,15 +963,8 @@ def main():
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         sc = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "WorkspaceLauncher.lnk")
-        if auto_var.get() and not os.path.exists(sc):
-            lnch = os.path.join(BASE_DIR, "WorkspaceLauncher.exe")
-            if os.path.exists(lnch):
-                vp = os.path.join(BASE_DIR, "_t.vbs")
-                with open(vp, "w") as fv:
-                    fv.write(f'Set s=CreateObject("WScript.Shell").CreateShortcut("{sc}")\ns.TargetPath="{lnch}"\ns.WorkingDirectory="{BASE_DIR}"\ns.WindowStyle=7\ns.Save')
-                subprocess.run(["cscript", "//nologo", vp], check=True)
-                try: os.remove(vp)
-                except: pass
+        if auto_var.get():
+            _write_startup_shortcut(sc)
         elif not auto_var.get() and os.path.exists(sc): os.remove(sc)
 
         messagebox.showinfo("Saved", "Configuration saved!")

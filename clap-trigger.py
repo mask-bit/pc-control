@@ -33,11 +33,11 @@ except ImportError:
 
 # --- CONFIGURATION ---
 
-DEFAULT_PROFILE = "default"
+DEFAULT_PROFILE = ""
 
 LAUNCHER_SCRIPT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "workspace-launcher.ps1"
+    "workspace.py"
 )
 
 CLAP_THRESHOLD_DB = 75    # Min. clap volume (dB)
@@ -61,12 +61,12 @@ def rms_db(data):
 
 def launch_workspace(profile):
     print(f"\n{'='*50}", flush=True)
-    print(f"  DOUBLE CLAP! Launching: {profile}", flush=True)
+    print(f"  DOUBLE CLAP! Launching: {profile or 'active profile'}", flush=True)
     print(f"{'='*50}\n", flush=True)
-    subprocess.Popen([
-        "powershell.exe", "-ExecutionPolicy", "Bypass",
-        "-File", LAUNCHER_SCRIPT, "-Profile", profile
-    ])
+    cmd = [sys.executable, LAUNCHER_SCRIPT, "--launch"]
+    if profile:
+        cmd.append(profile)
+    subprocess.Popen(cmd)
 
 
 def run_calibration(threshold):
@@ -104,7 +104,7 @@ def run_listener(profile, threshold, debug):
     print("=" * 50)
     print("  Clap Trigger")
     print("=" * 50)
-    print(f"  Profile:    {profile}")
+    print(f"  Profile:    {profile or 'active profile'}")
     print(f"  Threshold:  {threshold} dB")
     print(f"  Window:     {CLAP_MIN_GAP}-{CLAP_MAX_GAP}s")
     print(f"  Cooldown:   {COOLDOWN}s")
