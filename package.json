@@ -1,0 +1,13 @@
+{
+  "name": "pc-control",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Jarvis Assistant: controle local do PC por voz, com prototipo visual Tauri em assistant-desktop.",
+  "scripts": {
+    "postinstall": "npm --prefix assistant-desktop install",
+    "dev": "npm --prefix assistant-desktop run dev",
+    "build:frontend": "npm --prefix assistant-desktop run build",
+    "tauri:dev": "npm --prefix assistant-desktop run tauri:dev",
+    "tauri:build": "npm --prefix assistant-desktop run tauri:build"
+  }
+}

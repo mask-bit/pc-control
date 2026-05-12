@@ -17,6 +17,8 @@ Alpha funcional.
 
 ## Quickstart
 
+App principal real:
+
 ```bat
 python -m venv .venv
 .venv\Scripts\activate
@@ -31,6 +33,15 @@ start-jarvis.bat
 ```
 
 Na primeira execucao de voz, o app baixa o modelo Vosk portugues `vosk-model-small-pt-0.3`.
+
+Prototipo visual experimental:
+
+```bat
+npm install
+npm run dev
+```
+
+Esses comandos na raiz redirecionam para `assistant-desktop/`.
 
 ## Comandos de exemplo
 
