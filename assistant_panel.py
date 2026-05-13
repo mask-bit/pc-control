@@ -1,27 +1,36 @@
-"""Painel principal do Jarvis Assistant para Windows."""
+"""Painel principal do PC Control para Windows."""
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
-import sys
 import threading
 from dataclasses import asdict
-from pathlib import Path
 from tkinter import messagebox
 
 import customtkinter as ctk
 
+from app_paths import (
+    APP_NAME,
+    CONFIG_PATH,
+    LOG_PATH,
+    app_root,
+    clear_ephemeral_session,
+    ensure_app_dirs,
+    ensure_user_config,
+    executable_path,
+    is_frozen,
+    resolve_asset,
+    source_pythonw,
+)
+from auth_google import GoogleAuthManager
 from command_router import CommandRouter, ExecutionResult, load_assistant_config
 from intent_parser import parse_local
 from openai_controller import get_openai_key, test_openai_connection
 from secrets_store import set_secret
 from spotify_controller import authorize_pkce, get_status, is_connected
 from voice_engine import VoiceEngine, VoiceEngineState, list_input_devices, timestamp
-
-BASE_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = BASE_DIR / "assistant_config.json"
-LOG_PATH = BASE_DIR / "assistant_logs.jsonl"
 
 BG = "#090d16"
 SURFACE = "#111827"
@@ -38,8 +47,11 @@ ERROR = "#ef4444"
 
 class AssistantPanel:
     def __init__(self) -> None:
+        ensure_app_dirs()
+        ensure_user_config()
         self.config = load_assistant_config(str(CONFIG_PATH))
         self.router = CommandRouter(self.config, str(LOG_PATH))
+        self.google_auth = GoogleAuthManager()
         self.engine: VoiceEngine | None = None
         self.tray_icon = None
         self.hotkey_registered = False
@@ -50,10 +62,11 @@ class AssistantPanel:
         ctk.set_default_color_theme("blue")
 
         self.root = ctk.CTk(fg_color=BG)
-        self.root.title("Jarvis Assistant - Controle inteligente do PC")
+        self.root.title(f"{APP_NAME} - Controle inteligente do PC")
         self.root.geometry("1180x760")
         self.root.minsize(1020, 660)
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)
+        self._apply_window_icon()
 
         self.status_var = ctk.StringVar(value="Inicializando")
         self.subtitle_var = ctk.StringVar(value="Preparando microfone, hotkey e executor local.")
@@ -66,6 +79,8 @@ class AssistantPanel:
         self.hotkey_var = ctk.StringVar(value=self.config.get("hotkey", "Ctrl+Shift+J"))
         self.openai_key_var = ctk.StringVar()
         self.spotify_client_var = ctk.StringVar(value=self.config.get("spotify_web", {}).get("client_id", ""))
+        self.google_client_var = ctk.StringVar(value=self.config.get("google_auth", {}).get("client_id", ""))
+        self.google_status_var = ctk.StringVar(value=self.google_auth.status_label())
         self.spotify_query_var = ctk.StringVar(value="lo-fi focus")
         self.routine_name_var = ctk.StringVar(value="modo foco")
         self.mic_var = ctk.StringVar()
@@ -79,13 +94,79 @@ class AssistantPanel:
         self.chat_box: ctk.CTkTextbox | None = None
 
         self._build_shell()
+        atexit.register(clear_ephemeral_session)
         self._show_page("home")
+        self.root.after(450, self._show_onboarding_if_needed)
         self._start_voice()
         self._register_hotkey()
         self._start_tray()
 
     def run(self) -> None:
         self.root.mainloop()
+
+    def _apply_window_icon(self) -> None:
+        icon_path = resolve_asset("pc-control.ico")
+        if icon_path.exists():
+            try:
+                self.root.iconbitmap(str(icon_path))
+            except Exception:
+                pass
+
+    def _show_onboarding_if_needed(self) -> None:
+        if self.config.get("onboarding_complete"):
+            return
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title(f"Bem-vindo ao {APP_NAME}")
+        dialog.geometry("560x420")
+        dialog.resizable(False, False)
+        dialog.configure(fg_color=BG)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        ctk.CTkLabel(dialog, text=APP_NAME, font=("Segoe UI", 30, "bold"), text_color=TEXT).pack(
+            anchor="w", padx=28, pady=(28, 4)
+        )
+        ctk.CTkLabel(
+            dialog,
+            text=(
+                "Controle o PC por texto ou voz, abra apps, pesquise no YouTube, use Spotify e crie rotinas. "
+                "O login Google e opcional e a sessao padrao nao fica salva permanentemente."
+            ),
+            text_color=MUTED,
+            wraplength=500,
+            justify="left",
+        ).pack(anchor="w", padx=28, pady=(0, 22))
+        ctk.CTkButton(
+            dialog,
+            text="Entrar com Google",
+            height=44,
+            fg_color="#2563eb",
+            command=lambda: self._onboarding_google(dialog),
+        ).pack(fill="x", padx=28, pady=(0, 10))
+        ctk.CTkButton(
+            dialog,
+            text="Continuar em modo local",
+            height=44,
+            fg_color=SURFACE_2,
+            hover_color="#223049",
+            command=lambda: self._finish_onboarding(dialog),
+        ).pack(fill="x", padx=28, pady=(0, 14))
+        ctk.CTkLabel(
+            dialog,
+            text="Voce pode conectar Google, OpenAI e Spotify depois na tela Integracoes.",
+            text_color=MUTED,
+            wraplength=500,
+            justify="left",
+        ).pack(anchor="w", padx=28)
+
+    def _onboarding_google(self, dialog: ctk.CTkToplevel) -> None:
+        self._save_google_client()
+        self._login_google()
+        self._finish_onboarding(dialog)
+
+    def _finish_onboarding(self, dialog: ctk.CTkToplevel) -> None:
+        self.config["onboarding_complete"] = True
+        self._save_config()
+        dialog.destroy()
 
     def _build_shell(self) -> None:
         self.root.grid_columnconfigure(1, weight=1)
@@ -97,7 +178,7 @@ class AssistantPanel:
 
         brand = ctk.CTkFrame(sidebar, fg_color="transparent")
         brand.pack(fill="x", padx=22, pady=(24, 22))
-        ctk.CTkLabel(brand, text="Jarvis", font=("Segoe UI", 28, "bold"), text_color=TEXT).pack(anchor="w")
+        ctk.CTkLabel(brand, text=APP_NAME, font=("Segoe UI", 28, "bold"), text_color=TEXT).pack(anchor="w")
         ctk.CTkLabel(
             brand,
             text="Assistente de controle para Windows",
@@ -155,7 +236,7 @@ class AssistantPanel:
         ).grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
             topbar,
-            text="Fale ou escreva um comando. O Jarvis interpreta, valida e executa.",
+            text=f"Fale ou escreva um comando. O {APP_NAME} interpreta, valida e executa.",
             text_color=MUTED,
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
         ctk.CTkButton(topbar, text="Falar agora", width=128, height=38, command=self._arm_voice).grid(
@@ -335,7 +416,7 @@ class AssistantPanel:
             command=lambda: self._show_page("spotify"),
         ).pack(fill="x", padx=16, pady=(0, 16))
 
-        shortcuts = self._card(page, "Atalhos musicais", "Itens configurados em assistant_config.json.")
+        shortcuts = self._card(page, "Atalhos musicais", "Itens configurados no PC Control.")
         shortcuts.grid(row=1, column=0, columnspan=2, sticky="nsew")
         for name in sorted((self.config.get("spotify") or {}).keys()):
             if name == "default_query":
@@ -424,6 +505,7 @@ class AssistantPanel:
         page = self._page_frame()
         page.grid_columnconfigure(0, weight=1)
         page.grid_columnconfigure(1, weight=1)
+        page.grid_rowconfigure(1, weight=1)
 
         openai = self._card(page, "OpenAI", "Opcional: melhora interpretacao de frases vagas e responde pedidos de texto.")
         openai.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
@@ -466,6 +548,30 @@ class AssistantPanel:
             hover_color="#169c46",
             command=self._connect_spotify,
         ).pack(fill="x", padx=16, pady=(0, 16))
+
+        google = self._card(page, "Google", "Login opcional via navegador. A sessao padrao e temporaria e o app funciona sem conta.")
+        google.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(14, 0))
+        ctk.CTkLabel(
+            google,
+            textvariable=self.google_status_var,
+            text_color=SUCCESS if self.google_auth.session.active else MUTED,
+            font=("Segoe UI", 15, "bold"),
+        ).pack(anchor="w", padx=16, pady=(10, 8))
+        ctk.CTkEntry(
+            google,
+            textvariable=self.google_client_var,
+            placeholder_text="Google OAuth Client ID",
+            height=40,
+        ).pack(fill="x", padx=16, pady=(0, 10))
+        row = ctk.CTkFrame(google, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(0, 16))
+        ctk.CTkButton(row, text="Salvar Client ID", height=38, command=self._save_google_client).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(row, text="Entrar com Google", height=38, fg_color="#2563eb", command=self._login_google).pack(
+            side="left", padx=(0, 8)
+        )
+        ctk.CTkButton(row, text="Sair", height=38, fg_color=SURFACE_2, hover_color="#223049", command=self._logout_google).pack(
+            side="left"
+        )
 
     def _build_settings(self) -> None:
         page = self._page_frame()
@@ -542,24 +648,28 @@ class AssistantPanel:
             import pystray
             from PIL import Image, ImageDraw
 
-            image = Image.new("RGB", (64, 64), "#0b1220")
-            draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle((10, 10, 54, 54), radius=12, fill="#38bdf8")
-            draw.ellipse((24, 20, 40, 36), fill="#0b1220")
+            icon_path = resolve_asset("pc-control.ico")
+            if icon_path.exists():
+                image = Image.open(icon_path)
+            else:
+                image = Image.new("RGB", (64, 64), "#0b1220")
+                draw = ImageDraw.Draw(image)
+                draw.rounded_rectangle((10, 10, 54, 54), radius=12, fill="#38bdf8")
+                draw.ellipse((24, 20, 40, 36), fill="#0b1220")
 
             def show_window(icon, item):  # noqa: ANN001
                 self.root.after(0, self._show_window)
 
             def quit_app(icon, item):  # noqa: ANN001
                 icon.stop()
-                self.root.after(0, self.root.destroy)
+                self.root.after(0, self._quit_app)
 
             menu = pystray.Menu(
-                pystray.MenuItem("Abrir Jarvis", show_window),
+                pystray.MenuItem(f"Abrir {APP_NAME}", show_window),
                 pystray.MenuItem("Falar agora", lambda icon, item: self.root.after(0, self._arm_voice)),
                 pystray.MenuItem("Sair", quit_app),
             )
-            self.tray_icon = pystray.Icon("Jarvis", image, "Jarvis Assistant", menu)
+            self.tray_icon = pystray.Icon(APP_NAME, image, APP_NAME, menu)
             threading.Thread(target=self.tray_icon.run, daemon=True).start()
         except Exception:
             pass
@@ -645,7 +755,7 @@ class AssistantPanel:
             self.chat_box.insert("end", f"[{item['time']}] Usuario: {item['input']}\n")
             self.chat_box.insert("end", f"Intencao: {item['intent']}\n")
             self.chat_box.insert("end", f"Acao: {item['action']}\n")
-            self.chat_box.insert("end", f"Jarvis: {item['result']}\n\n")
+            self.chat_box.insert("end", f"{APP_NAME}: {item['result']}\n\n")
         self.chat_box.configure(state="disabled")
 
     def _update_voice_state(self, state: VoiceEngineState) -> None:
@@ -747,6 +857,46 @@ class AssistantPanel:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _save_google_client(self) -> None:
+        client_id = self.google_client_var.get().strip()
+        self.config.setdefault("google_auth", {})["client_id"] = client_id
+        self.config["google_auth"]["redirect_uri"] = "http://127.0.0.1:43880/google/callback"
+        self.config["google_auth"]["scopes"] = "openid email profile"
+        self.config["google_auth"]["remember_session"] = False
+        self._save_config()
+        self.router.config = self.config
+
+    def _login_google(self) -> None:
+        self._save_google_client()
+        client_id = self.config.get("google_auth", {}).get("client_id", "")
+        self.status_var.set("Conectando Google")
+        self.subtitle_var.set("O navegador sera aberto para login opcional.")
+
+        def worker() -> None:
+            try:
+                ok, message = self.google_auth.login(client_id)
+            except Exception as exc:
+                ok, message = False, f"Falha no login Google: {exc}"
+            self.root.after(0, lambda: self._google_result(ok, message))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _logout_google(self) -> None:
+        self.google_auth.logout()
+        self.google_status_var.set(self.google_auth.status_label())
+        self.status_var.set("Modo local")
+        self.subtitle_var.set("Sessao Google temporaria encerrada.")
+        if self.current_page == "integrations":
+            self._show_page("integrations")
+
+    def _google_result(self, ok: bool, message: str) -> None:
+        self.google_status_var.set(self.google_auth.status_label())
+        self.status_var.set("Google conectado" if ok else "Google indisponivel")
+        self.subtitle_var.set(message)
+        if self.current_page == "integrations":
+            self._show_page("integrations")
+        messagebox.showinfo("Google", message) if ok else messagebox.showerror("Google", message)
+
     def _integration_result(self, name: str, ok: bool, message: str, refresh_page: str | None = None) -> None:
         self.status_var.set(f"{name}: {'OK' if ok else 'falha'}")
         self.subtitle_var.set(message)
@@ -771,22 +921,21 @@ class AssistantPanel:
     def _configure_startup(self, enabled: bool) -> None:
         if os.name != "nt":
             return
-        startup = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-        startup.mkdir(parents=True, exist_ok=True)
-        script = startup / "JarvisAssistant.bat"
-        if not enabled:
-            if script.exists():
-                script.unlink()
-            return
-        pythonw = Path(sys.executable)
-        if pythonw.name.lower() == "python.exe":
-            candidate = pythonw.with_name("pythonw.exe")
-            if candidate.exists():
-                pythonw = candidate
-        script.write_text(
-            f'@echo off\ncd /d "{BASE_DIR}"\nstart "" "{pythonw}" "{BASE_DIR / "assistant_panel.py"}"\n',
-            encoding="utf-8",
-        )
+        import winreg
+
+        run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
+            if not enabled:
+                try:
+                    winreg.DeleteValue(key, "PC Control")
+                except FileNotFoundError:
+                    pass
+                return
+            if is_frozen():
+                command = f'"{executable_path()}"'
+            else:
+                command = f'"{source_pythonw()}" "{app_root() / "assistant_panel.py"}"'
+            winreg.SetValueEx(key, "PC Control", 0, winreg.REG_SZ, command)
 
     def _refresh_logs(self) -> None:
         if not self.logs_box:
@@ -810,6 +959,12 @@ class AssistantPanel:
 
     def _hide_window(self) -> None:
         self.root.withdraw()
+
+    def _quit_app(self) -> None:
+        if self.engine:
+            self.engine.stop()
+        clear_ephemeral_session()
+        self.root.destroy()
 
     def _show_window(self) -> None:
         self.root.deiconify()

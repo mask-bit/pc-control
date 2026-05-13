@@ -1,4 +1,4 @@
-"""Armazenamento local de segredos do Jarvis.
+"""Armazenamento local de segredos do PC Control.
 
 No Windows, usa DPAPI do proprio usuario para criptografar os valores antes de
 salvar no AppData. Se a biblioteca keyring estiver instalada, ela e usada
@@ -14,8 +14,12 @@ import os
 from ctypes import wintypes
 from pathlib import Path
 
-APP_NAME = "JarvisAssistant"
-SERVICE_NAME = "JarvisAssistant"
+from app_paths import APP_DATA_DIR, APP_ID
+
+APP_NAME = "PC Control"
+SERVICE_NAME = APP_ID
+LEGACY_SERVICE_NAME = "JarvisAssistant"
+LEGACY_APP_NAME = "JarvisAssistant"
 
 
 class DATA_BLOB(ctypes.Structure):
@@ -23,7 +27,7 @@ class DATA_BLOB(ctypes.Structure):
 
 
 def _store_path() -> Path:
-    base = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
+    base = APP_DATA_DIR if os.name == "nt" else Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
     base.mkdir(parents=True, exist_ok=True)
     return base / "secrets.json"
 
@@ -77,8 +81,12 @@ def _unprotect(data: bytes) -> bytes:
         ctypes.windll.kernel32.LocalFree(out_blob.pbData)
 
 
-def _read_file_store() -> dict[str, str]:
-    path = _store_path()
+def _legacy_store_path() -> Path:
+    return Path(os.environ.get("APPDATA", Path.home())) / LEGACY_APP_NAME / "secrets.json"
+
+
+def _read_file_store(path: Path | None = None) -> dict[str, str]:
+    path = path or _store_path()
     if not path.exists():
         return {}
     try:
@@ -119,11 +127,16 @@ def get_secret(name: str) -> str:
         value = keyring.get_password(SERVICE_NAME, name)
         if value:
             return value
+        legacy_value = keyring.get_password(LEGACY_SERVICE_NAME, name)
+        if legacy_value:
+            return legacy_value
     except Exception:
         pass
 
     store = _read_file_store()
     encoded = store.get(name)
+    if not encoded:
+        encoded = _read_file_store(_legacy_store_path()).get(name)
     if not encoded:
         return ""
     try:

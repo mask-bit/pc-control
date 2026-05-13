@@ -1,4 +1,3 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-python assistant_panel.py
+call "%~dp0start-pc-control.bat"

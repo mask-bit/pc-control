@@ -2,18 +2,20 @@
 
 ## Modelo de seguranca
 
-O Jarvis Assistant executa acoes locais no computador. Por isso, toda mudanca deve preservar estes limites:
+O PC Control executa acoes locais no computador. Por isso, toda mudanca deve preservar estes limites:
 
 - comandos desconhecidos nao devem executar nada;
 - acoes sensiveis devem pedir confirmacao;
 - logs nao devem armazenar chaves, tokens ou segredos;
 - a IA, quando habilitada, deve propor intencoes estruturadas, nao comandos arbitrarios;
 - o modo offline com Vosk deve continuar funcionando sem OpenAI.
+- Google e opcional e usa sessao temporaria por padrao.
 
 ## Segredos
 
 - Use variaveis de ambiente para chaves opcionais, como `OPENAI_API_KEY`.
 - Nunca commite arquivos `.env`, tokens OAuth, cookies, dumps de logs sensiveis ou modelos baixados.
+- Tokens persistentes so devem existir quando o usuario salvar explicitamente uma integracao.
 
 ## Reportar problema
 

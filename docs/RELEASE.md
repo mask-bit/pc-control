@@ -6,9 +6,10 @@
 2. Rodar validacoes:
 
 ```bat
-python -m py_compile assistant_panel.py voice_engine.py intent_parser.py command_router.py local_executor.py spotify_controller.py workspace.py config_gui.py config_utils.py clap-trigger.py voice-trigger.py
+python -m py_compile assistant_panel.py app_paths.py auth_google.py voice_engine.py intent_parser.py command_router.py local_executor.py spotify_controller.py openai_controller.py secrets_store.py
 python -m pytest
 cmd /c build.bat
+cmd /c build-installer.bat
 ```
 
 3. Testar manualmente:
@@ -21,4 +22,4 @@ pausa Spotify
 ativar modo estudo
 ```
 
-4. Publicar artefatos de `dist/`.
+4. Publicar `dist\PCControl.exe` e `dist\PCControlSetup.exe`.

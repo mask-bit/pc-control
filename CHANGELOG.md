@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Produto renomeado para PC Control.
+- Build principal gera `PCControl.exe`.
+- Adicionados AppData, assets, login Google opcional e instalador Inno Setup.
+- Dados do usuario agora ficam em `%APPDATA%\PC Control`.
+
 ## 0.1.0
 
 - Core Python reorientado para controle real por voz.

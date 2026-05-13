@@ -1,6 +1,8 @@
 {
-  "nome_assistente": "Jarvis",
+  "nome_assistente": "PC Control",
+  "nome_app": "PC Control",
   "idioma": "pt-BR",
+  "onboarding_complete": false,
   "wake_words": ["jarvis", "assistente"],
   "hotkey": "Ctrl+Shift+J",
   "listen_seconds": 7,
@@ -66,6 +68,12 @@
     "client_id": "",
     "redirect_uri": "http://127.0.0.1:43879/callback",
     "scopes": "user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative"
+  },
+  "google_auth": {
+    "client_id": "",
+    "redirect_uri": "http://127.0.0.1:43880/google/callback",
+    "scopes": "openid email profile",
+    "remember_session": false
   },
   "rotinas": {
     "modo estudo": [

@@ -69,7 +69,7 @@ Sem OpenAI, os comandos essenciais continuam funcionando pelo parser local.
 
 ## Customizacao
 
-Edite `assistant_config.json` para adicionar:
+Edite a config em `%APPDATA%\PC Control\assistant_config.json` ou use o painel para adicionar:
 
 - nomes de apps;
 - sites favoritos;

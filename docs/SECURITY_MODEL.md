@@ -15,6 +15,7 @@
 - Executar comandos arbitrarios nao faz parte do MVP.
 - OpenAI e opcional e nao deve bloquear o funcionamento offline.
 - Spotify OAuth usa PKCE e nao armazena client secret.
+- Google OAuth usa PKCE, escopos minimos `openid email profile` e sessao temporaria por padrao.
 - Rotinas armazenam acoes estruturadas (`ActionSpec`), nao scripts livres.
 
 ## Credenciais
@@ -22,7 +23,8 @@
 - OpenAI API key pode vir da variavel `OPENAI_API_KEY` ou ser salva pelo painel.
 - Token Spotify e chave OpenAI salvos pelo painel usam keyring quando disponivel ou DPAPI no Windows.
 - `assistant_config.json` guarda apenas configuracao operacional, como Client ID Spotify, apps, sites e rotinas.
+- Google Client ID pode ser salvo na config do usuario, mas tokens Google nao sao persistidos por padrao.
 
 ## Logs
 
-`assistant_logs.jsonl` e local e ignorado pelo Git. Ele serve para depuracao, mas nao deve receber segredos.
+`assistant_logs.jsonl` fica em `%APPDATA%\PC Control` e e ignorado pelo Git. Ele serve para depuracao, mas nao deve receber segredos.

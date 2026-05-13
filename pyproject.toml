@@ -1,7 +1,7 @@
 [project]
-name = "jarvis-assistant"
-version = "0.1.0"
-description = "Assistente local de controle por voz para Windows, com Vosk offline, comandos seguros e Spotify."
+name = "pc-control"
+version = "0.2.0"
+description = "App Windows de controle local do PC por texto e voz, com Vosk offline, comandos seguros, Spotify e login Google opcional."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
