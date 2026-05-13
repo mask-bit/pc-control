@@ -31,7 +31,7 @@ C:\Users\SEU_USUARIO\Documentos\pc-control
 ```
 
 5. Abra o PowerShell dentro dessa pasta.
-6. Rode o app em modo fonte ou gere o executavel seguindo os passos abaixo.
+6. Para a instalacao mais facil, de dois cliques em `install.bat`.
 
 ### Opcao 2: baixar com Git
 
@@ -45,6 +45,22 @@ cd pc-control
 
 ### Instalar dependencias para rodar por fonte
 
+Jeito mais facil:
+
+```bat
+install.bat
+```
+
+Esse script cria `.venv`, instala dependencias e cria atalhos **PC Control** no Desktop e no Menu Iniciar.
+
+Para remover apenas os atalhos criados pelo instalador simples:
+
+```bat
+uninstall-simple.bat
+```
+
+Jeito manual:
+
 Instale Python 3.10 ou superior pelo site oficial `https://www.python.org/downloads/windows/`. Durante a instalacao, marque **Add python.exe to PATH**.
 
 Depois rode:
@@ -55,6 +71,12 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python assistant_panel.py
+```
+
+Depois da instalacao simples, voce tambem pode abrir pelo atalho **PC Control** ou por:
+
+```bat
+start-pc-control.bat
 ```
 
 ### Gerar e abrir o aplicativo `.exe`

@@ -22,6 +22,7 @@ C:\Users\SEU_USUARIO\Documents\pc-control
 ```
 
 5. Abra o PowerShell nessa pasta.
+6. Para instalar do jeito mais facil, de dois cliques em `install.bat`.
 
 ### Pelo Git
 
@@ -43,6 +44,34 @@ python --version
 ```
 
 ## Rodar em modo fonte
+
+### Instalacao simples
+
+```bat
+install.bat
+```
+
+Esse comando:
+
+- cria `.venv`;
+- instala dependencias;
+- prepara AppData;
+- cria atalho no Desktop;
+- cria atalho no Menu Iniciar.
+
+Depois abra pelo atalho **PC Control** ou rode:
+
+```bat
+start-pc-control.bat
+```
+
+Para remover os atalhos criados por esse modo:
+
+```bat
+uninstall-simple.bat
+```
+
+### Instalacao manual
 
 ```bat
 python -m venv .venv
