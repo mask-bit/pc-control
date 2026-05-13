@@ -67,7 +67,13 @@ class GoogleAuthManager:
                 return
 
             def do_GET(self) -> None:  # noqa: N802
-                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                parsed_path = urllib.parse.urlparse(self.path)
+                if parsed_path.path != "/google/callback":
+                    self.send_response(404)
+                    self.end_headers()
+                    event.set()
+                    return
+                query = urllib.parse.parse_qs(parsed_path.query)
                 result["code"] = (query.get("code") or [""])[0]
                 result["state"] = (query.get("state") or [""])[0]
                 result["error"] = (query.get("error") or [""])[0]
@@ -101,8 +107,8 @@ class GoogleAuthManager:
                 "prompt": "select_account",
             }
         )
-        open_url(auth_url)
         try:
+            open_url(auth_url)
             if not event.wait(timeout):
                 return False, "Tempo esgotado aguardando login Google."
             if result.get("error"):

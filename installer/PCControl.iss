@@ -37,7 +37,7 @@ Name: "{group}\PC Control"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{a
 Name: "{autodesktop}\PC Control"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\pc-control.ico"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "PC Control"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: startup
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "PC Control"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir PC Control"; Flags: nowait postinstall skipifsilent

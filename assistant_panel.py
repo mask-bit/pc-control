@@ -49,6 +49,7 @@ class AssistantPanel:
     def __init__(self) -> None:
         ensure_app_dirs()
         ensure_user_config()
+        clear_ephemeral_session()
         self.config = load_assistant_config(str(CONFIG_PATH))
         self.router = CommandRouter(self.config, str(LOG_PATH))
         self.google_auth = GoogleAuthManager()
@@ -159,9 +160,15 @@ class AssistantPanel:
         ).pack(anchor="w", padx=28)
 
     def _onboarding_google(self, dialog: ctk.CTkToplevel) -> None:
-        self._save_google_client()
-        self._login_google()
         self._finish_onboarding(dialog)
+        if not self.google_client_var.get().strip():
+            self._show_page("integrations")
+            messagebox.showinfo(
+                "Google",
+                "Para entrar com Google, cole primeiro o OAuth Client ID na tela Integracoes.",
+            )
+            return
+        self._login_google()
 
     def _finish_onboarding(self, dialog: ctk.CTkToplevel) -> None:
         self.config["onboarding_complete"] = True
