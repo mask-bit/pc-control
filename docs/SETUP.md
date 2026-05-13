@@ -8,14 +8,79 @@
 - Internet na primeira execucao de voz para baixar o modelo Vosk portugues.
 - Inno Setup 6 para gerar `PCControlSetup.exe`.
 
+## Baixar o PC Control
+
+### Pelo GitHub em ZIP
+
+1. Abra `https://github.com/mask-bit/pc-control`.
+2. Clique em **Code**.
+3. Clique em **Download ZIP**.
+4. Extraia o arquivo em uma pasta simples, por exemplo:
+
+```text
+C:\Users\SEU_USUARIO\Documents\pc-control
+```
+
+5. Abra o PowerShell nessa pasta.
+
+### Pelo Git
+
+```bat
+cd "%USERPROFILE%\Documents"
+git clone https://github.com/mask-bit/pc-control.git
+cd pc-control
+```
+
+## Instalar Python
+
+1. Baixe Python para Windows em `https://www.python.org/downloads/windows/`.
+2. Durante a instalacao, marque **Add python.exe to PATH**.
+3. Feche e abra o PowerShell novamente.
+4. Confira:
+
+```bat
+python --version
+```
+
 ## Rodar em modo fonte
 
 ```bat
 python -m venv .venv
 .venv\Scripts\activate
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python assistant_panel.py
 ```
+
+## Gerar o executavel
+
+```bat
+cmd /c build.bat
+```
+
+Depois abra:
+
+```bat
+.\dist\PCControl.exe
+```
+
+## Gerar o instalador
+
+1. Instale Inno Setup 6 em `https://jrsoftware.org/isinfo.php`.
+2. Feche e abra o PowerShell novamente.
+3. Rode:
+
+```bat
+cmd /c build-installer.bat
+```
+
+Saida esperada:
+
+```text
+dist\PCControlSetup.exe
+```
+
+Se `ISCC.exe` nao for encontrado, confirme se o Inno Setup foi instalado em `C:\Program Files (x86)\Inno Setup 6`.
 
 ## Dados do usuario
 

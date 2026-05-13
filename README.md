@@ -15,6 +15,86 @@ Alpha funcional com empacotamento de produto.
 - Login Google: opcional, escopos `openid email profile`, sem persistencia padrao.
 - Tauri/React: experimental em `assistant-desktop/`.
 
+## Como baixar
+
+Existem dois jeitos principais de baixar o projeto.
+
+### Opcao 1: baixar ZIP pelo GitHub
+
+1. Abra o repositorio: `https://github.com/mask-bit/pc-control`.
+2. Clique no botao verde **Code**.
+3. Clique em **Download ZIP**.
+4. Extraia o ZIP em uma pasta simples, por exemplo:
+
+```text
+C:\Users\SEU_USUARIO\Documentos\pc-control
+```
+
+5. Abra o PowerShell dentro dessa pasta.
+6. Rode o app em modo fonte ou gere o executavel seguindo os passos abaixo.
+
+### Opcao 2: baixar com Git
+
+Se voce tem Git instalado:
+
+```bat
+cd "%USERPROFILE%\Documents"
+git clone https://github.com/mask-bit/pc-control.git
+cd pc-control
+```
+
+### Instalar dependencias para rodar por fonte
+
+Instale Python 3.10 ou superior pelo site oficial `https://www.python.org/downloads/windows/`. Durante a instalacao, marque **Add python.exe to PATH**.
+
+Depois rode:
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python assistant_panel.py
+```
+
+### Gerar e abrir o aplicativo `.exe`
+
+Depois de instalar as dependencias:
+
+```bat
+cmd /c build.bat
+```
+
+O executavel fica em:
+
+```text
+dist\PCControl.exe
+```
+
+Para abrir:
+
+```bat
+.\dist\PCControl.exe
+```
+
+### Gerar instalador Windows
+
+Para gerar `PCControlSetup.exe`, instale o Inno Setup 6: `https://jrsoftware.org/isinfo.php`.
+
+Depois rode:
+
+```bat
+cmd /c build-installer.bat
+```
+
+O instalador final fica em:
+
+```text
+dist\PCControlSetup.exe
+```
+
+Se aparecer erro dizendo que `ISCC.exe` nao foi encontrado, reinicie o terminal depois de instalar o Inno Setup ou confirme se ele foi instalado em `C:\Program Files (x86)\Inno Setup 6`.
+
 ## Quickstart
 
 Modo desenvolvimento:
