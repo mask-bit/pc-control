@@ -20,6 +20,20 @@ npm run prepare:llama
 npm run tauri:dev
 ```
 
+## Recuperar do GitHub
+
+Se voce perder a pasta local, clone o repositorio e rode o preparo novamente:
+
+```bat
+git clone https://github.com/mask-bit/pc-control.git
+cd pc-control
+npm install
+npm run prepare:llama
+npm run tauri:dev
+```
+
+`npm run prepare:llama` baixa o runtime `llama.cpp` e, se o GGUF nao existir localmente, baixa `Qwen3-8B-Q5_0.gguf` do Hugging Face. Dados privados do Windows, tokens OAuth, logs e caches continuam fora do GitHub de proposito.
+
 Para testar apenas a interface web:
 
 ```bat

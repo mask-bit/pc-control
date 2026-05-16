@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $appRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $srcTauri = Join-Path $appRoot "src-tauri"
 $modelSource = Join-Path $env:USERPROFILE "Downloads\ia\Qwen3-8B-Q5_0.gguf"
+$modelUrl = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q5_0.gguf"
 $promptSource = Join-Path $env:USERPROFILE "Downloads\ia\assistant_jarvis\prompts\system_prompt.md"
 $modelDir = Join-Path $srcTauri "resources\models"
 $promptDir = Join-Path $srcTauri "resources\prompts"
@@ -15,22 +16,15 @@ $serverResourceDest = Join-Path $resourceBinDir "llama-server.exe"
 
 New-Item -ItemType Directory -Force -Path $modelDir, $promptDir, $resourceBinDir, $binaryDir | Out-Null
 
-if (!(Test-Path -LiteralPath $modelSource)) {
-    throw "Modelo GGUF nao encontrado em: $modelSource"
-}
-
-$sourceModel = Get-Item -LiteralPath $modelSource
-$copyModel = $true
 if (Test-Path -LiteralPath $modelDest) {
-    $destModel = Get-Item -LiteralPath $modelDest
-    $copyModel = $destModel.Length -ne $sourceModel.Length
-}
-
-if ($copyModel) {
+    Write-Host "Modelo ja esta preparado em resources/models."
+} elseif (Test-Path -LiteralPath $modelSource) {
     Write-Host "Copiando modelo Qwen3-8B-Q5_0.gguf para recursos do app. Isso pode demorar..."
     Copy-Item -LiteralPath $modelSource -Destination $modelDest -Force
 } else {
-    Write-Host "Modelo ja esta preparado em resources/models."
+    Write-Host "Modelo local nao encontrado em: $modelSource"
+    Write-Host "Baixando Qwen3-8B-Q5_0.gguf do Hugging Face. O arquivo tem cerca de 5,7 GB..."
+    Invoke-WebRequest -Uri $modelUrl -OutFile $modelDest -Headers @{ "User-Agent" = "pc-control-ai-build" }
 }
 
 if (Test-Path -LiteralPath $promptSource) {
