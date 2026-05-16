@@ -6,18 +6,22 @@ node_modules/
 target/
 .vite/
 vite-dev*.log
+vite-dev*.err.log
+*.stdout.log
+*.stderr.log
+*.out.log
+*.err.log
 assistant_logs.jsonl
+assistant-desktop/src-tauri/resources/models/*.gguf
+assistant-desktop/src-tauri/resources/bin/*
+!assistant-desktop/src-tauri/resources/bin/.gitkeep
+assistant-desktop/src-tauri/binaries/*
+!assistant-desktop/src-tauri/binaries/.gitkeep
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
+# Local caches and environments
 .venv/
 venv/
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+__pycache__/
 
 # Secrets / local environment
 .env
@@ -26,20 +30,6 @@ htmlcov/
 
 # Claude Code workspace settings
 .claude/
-
-# Temporary files created by the app
-_r.vbs
-_a.txt
-_t.vbs
-_term_*.sh
-_term_*.ps1
-_term_*.bat
-
-# ML models (downloaded at runtime)
-*.pth
-*.tflite
-vosk_models/
-*.zip
 
 # IDE
 .vscode/

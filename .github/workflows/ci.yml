@@ -7,34 +7,8 @@ on:
     branches: [main, master]
 
 jobs:
-  python:
-    name: Python checks
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-
-      - name: Compile modules
-        run: |
-          python -m py_compile assistant_panel.py voice_engine.py intent_parser.py command_router.py local_executor.py spotify_controller.py workspace.py config_gui.py config_utils.py clap-trigger.py voice-trigger.py
-
-      - name: Run tests
-        run: |
-          python -m pytest
-
   frontend:
-    name: Experimental Tauri frontend
+    name: Tauri frontend
     runs-on: windows-latest
 
     defaults:
@@ -57,3 +31,21 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+  native:
+    name: Tauri native check
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: assistant-desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check Tauri backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml

@@ -22,10 +22,11 @@ body:
     attributes:
       label: Area
       options:
-        - Voz
-        - Parser de comandos
-        - Executor local
+        - Chat IA
+        - Login Google
+        - IA e creditos
+        - Executor protegido
         - Spotify
         - Rotinas
         - UI
-        - Build/instalador
+        - Build Tauri

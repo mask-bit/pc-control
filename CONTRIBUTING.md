@@ -1,26 +1,34 @@
 # Contribuindo
 
-Obrigado por ajudar o Jarvis Assistant a ficar mais real e confiavel.
+Obrigado por ajudar o PC Control AI a ficar mais confiavel.
 
 ## Ambiente
 
 ```bat
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements-dev.txt
+npm install
 ```
 
-## Validacao local
+Para rodar o app nativo, instale Rust/Cargo:
 
 ```bat
-python -m py_compile assistant_panel.py voice_engine.py intent_parser.py command_router.py local_executor.py spotify_controller.py workspace.py config_gui.py config_utils.py clap-trigger.py voice-trigger.py
-python -m pytest
+npm run tauri:dev
+```
+
+## Validacao Local
+
+```bat
+npm run build:frontend
+```
+
+Quando Rust/Cargo estiver disponivel:
+
+```bat
+npm run tauri:build
 ```
 
 ## Diretrizes
 
-- O produto principal e o core Python de voz e execucao.
-- O app Tauri em `assistant-desktop/` e experimental.
-- Nao adicione comandos de shell livre executados pela IA sem confirmacao explicita.
+- O produto principal e o app Tauri/React em `assistant-desktop/`.
+- Nao adicione execucao de shell livre controlada pela IA.
 - Nao salve chaves, tokens ou dados pessoais em arquivos versionados.
-- Priorize comandos reais e testaveis antes de telas ou simulacoes.
+- Acoes sensiveis devem continuar bloqueadas ou exigir confirmacao explicita.

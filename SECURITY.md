@@ -1,29 +1,28 @@
-# Politica de Seguranca
+# Politica De Seguranca
 
-## Modelo de seguranca
+## Modelo De Seguranca
 
-O PC Control executa acoes locais no computador. Por isso, toda mudanca deve preservar estes limites:
+O PC Control AI executa acoes locais no computador. Toda mudanca deve preservar estes limites:
 
-- comandos desconhecidos nao devem executar nada;
-- acoes sensiveis devem pedir confirmacao;
-- logs nao devem armazenar chaves, tokens ou segredos;
-- a IA, quando habilitada, deve propor intencoes estruturadas, nao comandos arbitrarios;
-- o modo offline com Vosk deve continuar funcionando sem OpenAI.
-- Google e opcional e usa sessao temporaria por padrao.
+- a IA nao pode executar PowerShell, CMD ou shell livre;
+- acoes sensiveis ou irreversiveis devem exigir confirmacao explicita;
+- logs nao devem armazenar chaves, tokens, senhas ou dados sensiveis;
+- tokens OAuth opcionais devem ficar apenas no armazenamento seguro do sistema;
+- o SQLite local deve guardar somente dados operacionais e perfil Google basico opcional.
 
 ## Segredos
 
-- Use variaveis de ambiente para chaves opcionais, como `OPENAI_API_KEY`.
-- Nunca commite arquivos `.env`, tokens OAuth, cookies, dumps de logs sensiveis ou modelos baixados.
-- Tokens persistentes so devem existir quando o usuario salvar explicitamente uma integracao.
+- Configure `GOOGLE_OAUTH_CLIENT_ID` apenas se for testar o Google opcional.
+- Nunca commite `.env`, tokens OAuth, cookies, dumps de logs sensiveis ou chaves.
+- A V1 nao pede chave de API para funcionar.
 
-## Reportar problema
+## Reportar Problema
 
 Abra uma issue com:
 
 - versao do Windows;
-- versao do Python;
-- comando de voz ou texto usado;
+- versao do app;
+- acao solicitada no chat;
 - resultado esperado;
 - resultado obtido;
 - logs sem dados sensiveis.

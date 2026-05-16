@@ -1,27 +1,25 @@
 # Roadmap
 
-## MVP atual
+## V1 Atual
 
-- Controle por voz offline com Vosk.
-- Hotkey + wake words.
-- Abertura de apps, sites, pastas e pesquisas.
-- Spotify por URI, busca e teclas de midia.
-- Rotinas simples em `assistant_config.json`.
-- Build Windows com PyInstaller.
+- App Tauri/React como produto principal.
+- 9 telas funcionais: Inicio, Assistente IA, Controle do PC, Aplicativos, Musica, Voz, Automacoes, Historico e Configuracoes.
+- IA local real com Qwen GGUF rodando em `llama-server.exe` embutido.
+- Uso sem conta; Google opcional para sincronizacao futura.
+- Execucao automatica protegida de acoes comuns do Windows.
+- Voz push-to-talk com captura/teste de microfone e aviso quando a transcricao local ainda nao existe.
 
-## Proximas melhorias
+## Proximas Melhorias
 
-- Confirmacao por voz com timeout visual.
-- Editor visual de rotinas no painel.
-- Deteccao de aplicativo aberto como gatilho real.
-- Melhor suporte a microfones e selecao de dispositivo.
-- Instalador Windows.
-- Testes end-to-end com comandos simulados.
+- Melhorar prompt/JSON schema do Qwen para mais tipos de tarefa.
+- Edicao visual de rotinas com acoes estruturadas.
+- Melhor deteccao de apps instalados no Windows.
+- Controle de janelas com foco, minimizar e maximizar reais.
+- Testes automatizados para filtro de seguranca Rust.
 
 ## Futuro
 
-- OpenAI opcional para interpretar comandos vagos.
+- Wake word/escuta continua opcional.
 - Memoria local de preferencias.
-- Integração Spotify Web API completa.
-- Plugin system para novos comandos.
-- Retomar Tauri apenas depois do core Python estar solido.
+- Sincronizacao opcional via Google.
+- Plugin system para novas ferramentas do assistente.

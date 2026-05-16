@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Assistente Inteligente",
+  "productName": "PC Control AI",
   "version": "0.1.0",
-  "identifier": "br.com.assistente.inteligente",
+  "identifier": "br.com.pccontrol.ai",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run prepare:llama && npm run build",
     "devUrl": "http://127.0.0.1:5173",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Assistente Inteligente",
+        "title": "PC Control AI",
         "width": 1280,
         "height": 820,
         "minWidth": 980,
@@ -25,9 +25,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "category": "Productivity",
-    "shortDescription": "Assistente inteligente local com IA e Spotify",
-    "longDescription": "Aplicativo desktop em portugues-BR para conversar com IA, executar acoes locais, controlar Spotify e criar rotinas."
+    "externalBin": ["binaries/llama-server"],
+    "resources": ["resources/bin/**/*", "resources/prompts/**/*"],
+    "shortDescription": "Assistente local para controlar o PC",
+    "longDescription": "Aplicativo desktop em portugues-BR para conversar com IA local, executar acoes comuns do Windows, controlar Spotify e criar rotinas."
   }
 }

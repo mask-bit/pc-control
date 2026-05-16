@@ -1,4 +1,7 @@
-use crate::models::{AssistantSettings, ChatMessage, LogEntry, Routine};
+use crate::models::{
+    AssistantSettings, ChatMessage, CommandHistoryEntry, GoogleProfile, LogEntry, MemoryEntry,
+    MusicFavorite, Routine, TaskState,
+};
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -56,6 +59,33 @@ impl Database {
                 message TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS command_history (
+                id TEXT PRIMARY KEY,
+                command TEXT NOT NULL,
+                actions_json TEXT NOT NULL,
+                assistant_reply TEXT NOT NULL,
+                result_summary TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT NOT NULL,
+                pinned INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS music_favorites (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                uri TEXT,
+                query TEXT,
+                kind TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             "#,
         )
         .map_err(|err| err.to_string())
@@ -63,7 +93,7 @@ impl Database {
 
     pub fn get_settings(&self) -> Result<AssistantSettings, String> {
         match self.get_setting("assistant_settings")? {
-            Some(raw) => serde_json::from_str(&raw).map_err(|err| err.to_string()),
+            Some(raw) => Ok(serde_json::from_str(&raw).unwrap_or_default()),
             None => Ok(AssistantSettings::default()),
         }
     }
@@ -73,6 +103,38 @@ impl Database {
             "assistant_settings",
             &serde_json::to_string(settings).map_err(|err| err.to_string())?,
         )
+    }
+
+    pub fn get_google_profile(&self) -> Result<Option<GoogleProfile>, String> {
+        self.get_setting("google_profile")?
+            .map(|raw| serde_json::from_str(&raw).map_err(|err| err.to_string()))
+            .transpose()
+    }
+
+    pub fn save_google_profile(&self, profile: &GoogleProfile) -> Result<(), String> {
+        self.set_setting(
+            "google_profile",
+            &serde_json::to_string(profile).map_err(|err| err.to_string())?,
+        )
+    }
+
+    pub fn clear_google_profile(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM settings WHERE key = ?1", params!["google_profile"])
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn is_onboarding_complete(&self) -> Result<bool, String> {
+        Ok(self
+            .get_setting("onboarding_complete")?
+            .as_deref()
+            .map(|value| value == "true")
+            .unwrap_or(false))
+    }
+
+    pub fn set_onboarding_complete(&self, complete: bool) -> Result<(), String> {
+        self.set_setting("onboarding_complete", if complete { "true" } else { "false" })
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>, String> {
@@ -170,6 +232,7 @@ impl Database {
                         kind: "manual".to_string(),
                         label: "Manual".to_string(),
                         value: None,
+                        aliases: Vec::new(),
                     }),
                     actions: serde_json::from_str(&actions_raw).unwrap_or_default(),
                     created_at: row.get(5)?,
@@ -239,5 +302,212 @@ impl Database {
             .map_err(|err| err.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.to_string())
+    }
+
+    pub fn clear_history(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM chat_messages", [])
+            .map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM logs", [])
+            .map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM command_history", [])
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn save_history_entry(&self, entry: &CommandHistoryEntry) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO command_history
+             (id, command, actions_json, assistant_reply, result_summary, status, source, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                entry.id,
+                entry.command,
+                serde_json::to_string(&entry.actions).map_err(|err| err.to_string())?,
+                entry.assistant_reply,
+                entry.result_summary,
+                entry.status,
+                entry.source,
+                entry.created_at
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_history_entries(&self) -> Result<Vec<CommandHistoryEntry>, String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, command, actions_json, assistant_reply, result_summary, status, source, created_at
+                 FROM command_history ORDER BY created_at DESC LIMIT 300",
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                let actions_raw: String = row.get(2)?;
+                Ok(CommandHistoryEntry {
+                    id: row.get(0)?,
+                    command: row.get(1)?,
+                    actions: serde_json::from_str(&actions_raw).unwrap_or_default(),
+                    assistant_reply: row.get(3)?,
+                    result_summary: row.get(4)?,
+                    status: row.get(5)?,
+                    source: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    }
+
+    pub fn get_task_state(&self) -> Result<TaskState, String> {
+        match self.get_setting("task_state")? {
+            Some(raw) => Ok(serde_json::from_str(&raw).unwrap_or_default()),
+            None => Ok(TaskState::default()),
+        }
+    }
+
+    pub fn save_task_state(&self, task_state: &TaskState) -> Result<(), String> {
+        self.set_setting(
+            "task_state",
+            &serde_json::to_string(task_state).map_err(|err| err.to_string())?,
+        )
+    }
+
+    pub fn clear_task_state(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM settings WHERE key = ?1", params!["task_state"])
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_memories(&self) -> Result<Vec<MemoryEntry>, String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, title, content, category, pinned, created_at, updated_at
+                 FROM memories ORDER BY pinned DESC, updated_at DESC LIMIT 120",
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(MemoryEntry {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    content: row.get(2)?,
+                    category: row.get(3)?,
+                    pinned: row.get::<_, i64>(4)? == 1,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    }
+
+    pub fn save_memory(&self, memory: &MemoryEntry) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO memories
+             (id, title, content, category, pinned, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                memory.id,
+                memory.title,
+                memory.content,
+                memory.category,
+                if memory.pinned { 1 } else { 0 },
+                memory.created_at,
+                memory.updated_at
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_memory(&self, id: &str) -> Result<bool, String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        let changed = conn
+            .execute("DELETE FROM memories WHERE id = ?1", params![id])
+            .map_err(|err| err.to_string())?;
+        Ok(changed > 0)
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_memories(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute("DELETE FROM memories", [])
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_music_favorites(&self) -> Result<Vec<MusicFavorite>, String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, uri, query, kind, created_at
+                 FROM music_favorites ORDER BY created_at DESC LIMIT 80",
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(MusicFavorite {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    uri: row.get(2)?,
+                    query: row.get(3)?,
+                    kind: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    }
+
+    pub fn save_music_favorite(&self, favorite: &MusicFavorite) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO music_favorites
+             (id, name, uri, query, kind, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                favorite.id,
+                favorite.name,
+                favorite.uri,
+                favorite.query,
+                favorite.kind,
+                favorite.created_at
+            ],
+        )
+        .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_music_favorite(&self, id: &str) -> Result<bool, String> {
+        let conn = self.conn.lock().map_err(|err| err.to_string())?;
+        let changed = conn
+            .execute("DELETE FROM music_favorites WHERE id = ?1", params![id])
+            .map_err(|err| err.to_string())?;
+        Ok(changed > 0)
+    }
+
+    pub fn find_music_favorite(&self, query: &str) -> Result<Option<MusicFavorite>, String> {
+        let normalized = query.trim().to_lowercase();
+        if normalized.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(self
+            .list_music_favorites()?
+            .into_iter()
+            .find(|favorite| {
+                let name = favorite.name.to_lowercase();
+                name == normalized || name.contains(&normalized) || normalized.contains(&name)
+            }))
     }
 }

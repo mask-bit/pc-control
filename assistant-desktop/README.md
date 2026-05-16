@@ -1,14 +1,6 @@
-# Assistente Inteligente Desktop Experimental
+# PC Control AI Desktop
 
-Prototipo visual em Tauri + React. Ele nao e o produto principal no momento.
-
-O app real de controle por voz agora fica no core Python da raiz do projeto, iniciado por:
-
-```bat
-python assistant_panel.py
-```
-
-Use este pacote Tauri apenas como referencia visual/experimental enquanto o motor real de voz, comandos e execucao evolui em Python.
+App principal em Tauri + React para o assistente local de PC. Ele abre sem login, roda `Qwen3-8B-Q5_0.gguf` via `llama-server.exe` embutido e executa automaticamente acoes comuns do Windows.
 
 ## Stack
 
@@ -17,12 +9,14 @@ Use este pacote Tauri apenas como referencia visual/experimental enquanto o moto
 - Vite
 - Rust no nucleo local
 - SQLite para dados locais
-- Windows Credential Manager via camada nativa para credenciais
+- `llama.cpp` como runtime local do modelo
+- Windows Credential Manager para tokens opcionais
 
 ## Rodar em desenvolvimento
 
 ```bat
 npm install
+npm run prepare:llama
 npm run dev
 ```
 
@@ -39,6 +33,10 @@ npm run build
 npm run tauri:build
 ```
 
-## Credenciais
+O build nativo gera setup `.exe` via NSIS e inclui o runtime local. O GGUF fica como arquivo externo configuravel porque o NSIS nao suporta um setup unico com esse modelo de 5,7 GB.
 
-O app foi desenhado para BYO local: cada usuario informa a propria OpenAI API key e conecta a propria conta Spotify por OAuth PKCE. Tokens nao devem ser salvos no SQLite.
+## IA local
+
+A V1 nao pede chave de API. O provider padrao e `qwen_embedded`, que inicia `llama-server.exe` em `127.0.0.1:18181`, carrega `Qwen3-8B-Q5_0.gguf` e exige resposta JSON antes de executar qualquer acao.
+
+Google e Spotify sao opcionais. Google fica reservado para sincronizacao futura; Spotify usa OAuth PKCE quando o usuario decide conectar.

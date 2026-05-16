@@ -1,55 +1,46 @@
 # Arquitetura
 
-## Visao geral
+## Visao Geral
 
-O projeto tem um nucleo Python real para controle do PC por voz e texto. A interface Tauri existe como experimento visual, mas nao e o produto principal. O produto oficial e o app Windows **PC Control**, iniciado por `assistant_panel.py` no modo fonte e por `PCControl.exe` no modo instalado.
+O produto principal e o app Tauri/React em `assistant-desktop/`. A V1 usa `Qwen3-8B-Q5_0.gguf` via `llama.cpp` embutido, abre sem conta e executa acoes comuns do Windows automaticamente. Google fica opcional para sincronizacao futura.
 
 ```mermaid
 flowchart LR
-  Mic["Microfone / hotkey / wake word"] --> Voice["voice_engine.py"]
-  Voice --> Parser["intent_parser.py"]
-  Parser --> OpenAI["openai_controller.py opcional"]
-  Parser --> Router["command_router.py"]
-  Router --> Exec["local_executor.py"]
-  Router --> Spotify["spotify_controller.py"]
-  Router --> Logs["assistant_logs.jsonl"]
-  OpenAI --> Secrets["secrets_store.py"]
-  Spotify --> Secrets
-  Panel --> Google["auth_google.py opcional"]
-  Panel --> Paths["app_paths.py"]
-  Panel["assistant_panel.py"] --> Voice
-  Panel --> Router
-  Config["assistant_config.json"] --> Parser
-  Config --> Router
+  UI["React UI - 9 telas"] --> Chat["Chat do assistente"]
+  Chat --> LocalAI["local_ai.rs"]
+  LocalAI --> Llama["llama-server.exe local"]
+  Llama --> Qwen["Qwen3-8B-Q5_0.gguf"]
+  LocalAI --> Safety["Filtro de autonomia"]
+  Safety --> Actions["actions.rs"]
+  Safety --> System["system_control.rs"]
+  Safety --> Spotify["spotify.rs"]
+  UI --> Settings["Configuracoes e permissoes"]
+  UI --> History["Historico SQLite"]
 ```
 
-## Modulos principais
+## Modulos Principais
 
-- `assistant_panel.py`: janela principal profissional com Inicio, Assistente, Spotify, Rotinas, Voz e audio, Integracoes, Configuracoes e Logs.
-- `app_paths.py`: identidade do produto, AppData, LocalAppData, cache, sessao e assets.
-- `auth_google.py`: login Google opcional via OAuth PKCE local, com sessao temporaria.
-- `voice_engine.py`: captura de audio, Vosk offline, wake words, hotkey, selecao de microfone e nivel de entrada.
-- `intent_parser.py`: converte texto em `CommandIntent`, incluindo comandos compostos como "abrir Chrome e Spotify".
-- `command_router.py`: valida intencao, cria `ActionSpec`, pede confirmacao quando necessario e executa com seguranca.
-- `local_executor.py`: integra com Windows para apps, sites, YouTube, pastas, fechar apps, volume e clipboard.
-- `spotify_controller.py`: controla Spotify por URI/teclas de midia e Web API via OAuth PKCE quando conectado.
-- `openai_controller.py`: usa OpenAI Responses API opcionalmente para interpretar frases vagas e gerar respostas curtas.
-- `secrets_store.py`: salva chaves/tokens fora do JSON, usando keyring quando disponivel ou DPAPI no Windows.
-- `installer/PCControl.iss`: instalador Inno Setup per-user.
+- `assistant-desktop/src/App.tsx`: interface V1 com Inicio, Assistente IA, Controle do PC, Aplicativos, Musica, Voz, Automacoes, Historico e Configuracoes.
+- `assistant-desktop/src-tauri/src/local_ai.rs`: inicia `llama-server`, envia prompt ao Qwen e valida JSON de acoes.
+- `assistant-desktop/src-tauri/src/system_control.rs`: volume, screenshots, apps e processos do Windows.
+- `assistant-desktop/src-tauri/src/actions.rs`: executor local e filtro de acoes sensiveis.
+- `assistant-desktop/src-tauri/src/storage.rs`: SQLite local para mensagens, rotinas, logs, settings e perfil Google opcional.
+- `assistant-desktop/scripts/prepare-llama-runtime.ps1`: copia o GGUF e baixa/prepara `llama-server.exe`.
 
-## Contrato de comando
+## Fluxo De Comando
 
-1. Voz ou texto entra como frase natural.
-2. Parser cria uma intencao estruturada.
-3. Router cria uma acao segura.
-4. Executor roda a acao ou pede confirmacao.
-5. Resultado e salvo nos logs.
+1. O usuario digita ou envia um comando por push-to-talk.
+2. `local_ai.rs` garante que o `llama-server` esta rodando em `127.0.0.1:18181`.
+3. O Qwen recebe prompt de sistema + catalogo de ferramentas.
+4. O modelo deve retornar JSON com `assistant_reply` e `actions`.
+5. Se o JSON for invalido, nada e executado.
+6. O filtro local separa acoes comuns de acoes perigosas.
+7. Acoes comuns sao executadas automaticamente; perigosas aparecem para confirmacao unica.
+8. O resultado aparece no chat, logs e historico.
 
-## Regras de seguranca
+## Regras De Seguranca
 
-- A IA nao executa shell livre.
-- Comandos desconhecidos falham de forma segura.
-- Tokens e chaves nao sao gravados nos logs.
-- OpenAI e Spotify sao opcionais; comandos essenciais continuam locais.
-- Google e opcional, nao bloqueia o app e nao persiste sessao por padrao.
-- Rotinas salvas guardam `ActionSpec`, nao texto arbitrario para shell.
+- Nao executar PowerShell, CMD ou shell livre por decisao da IA.
+- Bloquear pedidos de apagar arquivos, comprar, enviar credenciais, manipular tokens ou expor segredos.
+- Pedir confirmacao para desligar, reiniciar, limpar historico e encerrar processo critico.
+- Guardar no SQLite somente dados operacionais e perfil Google basico opcional.
